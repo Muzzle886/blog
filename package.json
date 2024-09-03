@@ -3,23 +3,26 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "orm:migrate": "prisma migrate dev",
+    "orm:generate": "prisma generate"
   },
   "dependencies": {
     "@ant-design/icons": "^5.4.0",
     "@ant-design/nextjs-registry": "^1.0.1",
     "@bytemd/plugin-highlight": "^1.21.0",
     "@bytemd/react": "^1.21.0",
+    "@prisma/client": "5.19.1",
     "antd": "^5.20.3",
     "dompurify": "^3.1.6",
     "github-markdown-css": "^5.6.1",
     "jsdom": "^25.0.0",
     "marked": "^14.1.0",
+    "mysql2": "^3.11.0",
     "next": "14.2.7",
-    "pg": "^8.12.0",
     "react": "^18",
     "react-dom": "^18"
   },
@@ -33,6 +36,7 @@
     "eslint": "^8",
     "eslint-config-next": "14.2.7",
     "postcss": "^8",
+    "prisma": "^5.19.1",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
   },
