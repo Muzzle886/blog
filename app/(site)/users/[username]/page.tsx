@@ -7,12 +7,13 @@ import { postService } from '@/server/post-service'
 import { PostCard } from '@/components/post-card'
 import { EmptyState } from '@/components/ui'
 import { CalendarIcon } from '@/components/icons'
+import { page as pageParam, type PageSearchParams } from '@/lib/search-params'
 
 export const dynamic = 'force-dynamic'
 
 interface ProfilePageProps {
   params: { username: string }
-  searchParams: { page?: string }
+  searchParams: PageSearchParams
 }
 
 export async function generateMetadata({ params }: ProfilePageProps): Promise<Metadata> {
@@ -30,7 +31,7 @@ export async function generateMetadata({ params }: ProfilePageProps): Promise<Me
 const PAGE_SIZE = 10
 
 export default async function ProfilePage({ params, searchParams }: ProfilePageProps) {
-  const page = Math.max(1, Number(searchParams.page) || 1)
+  const page = pageParam(searchParams.page)
 
   let profile
   try {

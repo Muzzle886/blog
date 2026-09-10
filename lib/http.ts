@@ -66,19 +66,44 @@ export function toErrorResponse(error: unknown): NextResponse {
 }
 
 /**
- * 路由包装器：统一异常处理，避免每个 handler 都写 try/catch。
+ * 路由包装器：统一异常处理 + 统一缓存策略，避免每个 handler 都写 try/catch。
  *
  *   export const GET = route(async (req) => ok(await listPosts(...)))
+ *
+ * 关于缓存头：接口响应可能因 Cookie 不同而不同（例如 /api/users/me、
+ * /api/posts 里作者能看到自己的草稿）。默认不下发任何 Cache-Control 时，
+ * 共享缓存/CDN 可能按启发式规则缓存它，且 Vary 里没有 Cookie，
+ * 于是把 A 的登录态响应发给 B。这里统一显式关闭缓存并声明 Vary。
+ *
+ * 实现上刻意「就地改写」而不是 new NextResponse(response.body, ...)：
+ * 后者会丢掉 Set-Cookie —— 登录/注册正是在 Response 上挂会话 Cookie 的，
+ * 重建响应会让「登录成功但没拿到 Cookie」，表现为后续请求全部 401。
  */
 export function route<Args extends unknown[]>(
   handler: (request: Request, ...args: Args) => Promise<NextResponse>,
 ): (request: Request, ...args: Args) => Promise<NextResponse> {
   return async (request, ...args) => {
+    let response: NextResponse
     try {
-      return await handler(request, ...args)
+      response = await handler(request, ...args)
     } catch (error) {
-      return toErrorResponse(error)
+      response = toErrorResponse(error)
     }
+
+    try {
+      if (!response.headers.has('Cache-Control')) {
+        response.headers.set('Cache-Control', 'no-store, must-revalidate')
+      }
+      // 声明响应会随 Cookie 变化，避免共享缓存串号
+      if (!response.headers.has('Vary')) {
+        response.headers.set('Vary', 'Cookie')
+      }
+    } catch {
+      // 某些响应（如 redirect）的头部是只读的。缓存头是加固项，
+      // 取不到就算了，绝不能因此把正常响应变成 500。
+    }
+
+    return response
   }
 }
 

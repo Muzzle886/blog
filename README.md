@@ -126,8 +126,10 @@ scripts/                     # 建库、端到端测试、设计验收、截图
 | `DELETE` | `/api/auth/session` | 退出登录 | — |
 | `GET` | `/api/users/me` | 当前用户 | 需登录 |
 | `PATCH` | `/api/users/me` | 更新昵称 / 邮箱 / 简介 | 需登录 |
-| `PATCH` | `/api/users/me/password` | 修改密码（成功后失效会话） | 需登录 |
-| `GET` | `/api/users/:username` | 公开资料 | — |
+| `PATCH` | `/api/users/me/password` | 修改密码（撤销该用户**全部**会话） | 需登录 |
+| `GET` | `/api/users/me/sessions` | 列出有效登录会话（返回摘要，非令牌） | 需登录 |
+| `DELETE` | `/api/users/me/sessions` | 退出其它所有设备（保留当前会话） | 需登录 |
+| `GET` | `/api/users/:username` | 公开资料（不含 email / role） | — |
 | `GET` | `/api/posts` | 文章列表 | — |
 | `POST` | `/api/posts` | 新建文章 | 需登录 |
 | `GET` | `/api/posts/:slug` | 文章详情 | — |
@@ -242,13 +244,14 @@ ssh -N -L 33306:127.0.0.1:3306 <user>@<db-host> -p <ssh-port>
 
 ## 验收
 
-项目自带四个可重复执行的验收脚本。**启动服务后**运行：
+项目自带五个可重复执行的验收脚本。**启动服务后**运行：
 
 ```bash
 pnpm test:case      # 大小写一致性检查（无需服务）
 pnpm test:api       # 41 项 API 契约与权限断言（curl）
 pnpm test:design    # 72 项设计系统与交互断言（无头浏览器）
-pnpm test           # 三者连跑
+pnpm test:security  # 55 项安全断言（会话、限流、清洗、响应头、数据暴露）
+pnpm test           # 四个套件连跑（case → security → api → design）
 pnpm shots          # 逐页截图到 .screenshots/，供人工核对视觉
 ```
 
@@ -259,20 +262,33 @@ pnpm shots          # 逐页截图到 .screenshots/，供人工核对视觉
 
 `test:api` 覆盖：状态码、响应结构、字段级校验、软删除可见性、
 越权拦截（非作者改/删、游客读草稿）、游标分页、会话失效。
+脚本启动前会先探测数据库连通性 —— 隧道断开时会有大量 500，
+与代码缺陷极易混淆，预检能直接把它区分出来。
 
 `test:design` 覆盖：无装饰性阴影、容器圆角 ≤ 12px、色板收敛、
 深色模式对比度 ≥ 7:1、320–1440px 无横向溢出、单一 h1、
 控件可读名称、Tab 焦点可见、搜索防抖、表单校验错误展示。
 
+`test:security` 覆盖：会话令牌明文不入库（直接查库核对摘要）、
+改密码撤销全部会话、退出其它设备、伪造/畸形令牌、账号枚举提示一致性、
+5 项安全响应头与 CSP 的 nonce 策略、公开接口不泄露 `email`/`role`/`passwordHash`、
+Markdown 清洗（含 `data:` URI 白名单）、速率限制生效且不可绕过、
+畸形与边界输入不产生 5xx。
+
 > 当前状态：`test:case` 206 条 import 全通过、`test:api` 41/41、
-> `test:design` 72/72（dev 与 production 构建均已验证）。
+> `test:design` 72/72、`test:security` 55/55（dev 与 production 构建均已验证）。
 
 `test:api` 会在数据库中创建 `e2e_author_*` / `e2e_reader_*` 测试账号与临时文章
 （文章在用例末尾删除，账号与软删除记录保留）。若要彻底清理：
 
 ```bash
-pnpm db:seed   # 清空并重写演示数据（会删掉全部用户、文章、评论）
+pnpm db:seed   # 清空并重写演示数据
 ```
+
+`db:seed` 会删除全部用户、文章、评论与会话，因此带了两道护栏：
+`NODE_ENV=production` 下直接拒绝（需显式 `ALLOW_PROD_SEED=true`），
+其它环境需要 `--yes`（`pnpm db:seed` 已内置）或交互式确认。
+未设置 `SEED_ADMIN_PASSWORD` 时会打印警告说明用的是公开默认口令。
 
 > ⚠️ `next build` 与 `next dev` 共用 `.next/` 目录，**不要同时运行**，
 > 否则 dev server 会出现 `Cannot find module './NNN.js'`。
@@ -282,16 +298,72 @@ pnpm db:seed   # 清空并重写演示数据（会删掉全部用户、文章、
 
 ## 安全
 
-- **XSS**：Markdown 渲染经由 `marked` → `DOMPurify` 白名单清洗，
-  `<script>` / `onerror` / `javascript:` / `<iframe>` / `<style>` 全部被剥离，
-  正常排版（标题、加粗、代码块）保留。
-- **密码**：`scrypt` 加盐哈希，校验使用 `timingSafeEqual` 防时序侧信道。
-- **会话**：httpOnly + SameSite=Lax；生产环境设置 `COOKIE_SECURE=true`；
-  修改密码后当前会话立即失效。
-- **账号枚举**：登录失败时「账号不存在」与「密码错误」返回同一提示。
-- **越权**：所有写操作在服务层校验资源归属，不依赖前端隐藏入口。
-- **受保护路由**：`middleware.ts` 在 Edge 做廉价前置拦截（返回 307），
-  layout 再做真实会话校验。
+### 认证与会话
+
+- **不使用 JWT**，采用服务端会话表 + httpOnly Cookie。理由是可服务端撤销：
+  改密码、退出其它设备都能立即生效，且无需管理签名密钥。
+- **会话令牌不明文入库**：Cookie 里是 256 位 CSPRNG 随机令牌（64 位十六进制），
+  数据库只存它的 **SHA-256 摘要**。库被读走时拿到的是无法直接用于认证的摘要。
+  这里用无盐 SHA-256 而非 scrypt —— 令牌本身已是 2^256 的均匀随机数，
+  不存在弱口令可爆破，而会话查找必须能走索引。
+  > 本次加固的副作用：查找方式从「按明文令牌查」改为「按摘要查」，
+  > 因此**升级后所有既有会话一次性失效**，用户需要重新登录一次。
+- **双重过期**：`expiresAt` 绝对超时（14 天）+ `lastUsedAt` 空闲超时（7 天）。
+  过期会话在登录时机会性清理（服务进程内 10 分钟最多一次）。
+- **撤销语义**：修改密码会撤销该用户的**全部**会话，而不只是当前这一个 ——
+  否则账号被盗后受害者改密码并不能把攻击者踢下线。
+  另有 `DELETE /api/users/me/sessions` 用于「退出其它设备」，
+  `GET /api/users/me/sessions` 列出有效登录会话（返回的是摘要，不是令牌）。
+- **Cookie 属性**：httpOnly + SameSite=Lax + Path=/；
+  **生产环境未设置 `COOKIE_SECURE=true` 会直接启动失败**，而不是静默降级 ——
+  14 天有效期的令牌经明文 HTTP 泄露等同于账号被接管，这种配置错误应该在部署时暴露。
+
+### 密码
+
+- `scrypt` 加盐哈希，参数 **N=2^17, r=8, p=1**（依据 OWASP Password Storage
+  Cheat Sheet；内存约 134MB、单次约 240ms）。存储格式自描述参数：
+  `scrypt$N$r$p$salt$hash`，旧格式在登录成功时静默升级，无需强制改密。
+- 校验使用 `timingSafeEqual`（先校验长度，否则它会抛异常反而泄露长度）。
+- 账号不存在时也会跑一次等价开销的哈希，抹平「存在则慢、不存在则快」的时间差。
+- 登录/改密接口对密码长度设上限（128）—— 不限长时 scrypt 会成为
+  CPU/内存放大器。
+- 数据库中不存在任何明文口令（`test:security` 直接查库核对）。
+
+### 速率限制
+
+`lib/rate-limit.ts` 进程内滑动窗口，按维度区分：登录按账号（10 次/15 分钟）
+与来源 IP（30 次/15 分钟）、注册按 IP（10 次/小时）、评论与发文按用户。
+限流生效后**正确密码同样会被挡**，避免限流形同虚设。
+
+> 局限：多实例部署时每个实例各算一份，实际额度是「单实例额度 × 实例数」。
+> 需要严格限流时应换成 Redis 或网关层限流。
+
+### 输入与输出
+
+- **XSS**：Markdown 经 `marked` → `DOMPurify` 白名单清洗，
+  `<script>` / `onerror` / `javascript:` / `<iframe>` / `<style>` 全部剥离，
+  正常排版保留。清洗配置在 `lib/sanitize-config.ts` 单点定义，
+  服务端渲染与编辑器预览共用，避免两处漂移。
+  `data:` URI 只放行常见位图格式，`data:text/html` 与 `data:image/svg+xml` 会被移除。
+- **SQL 注入**：全仓库无 `$queryRaw*` / `$executeRaw*`，所有访问都走 Prisma 查询构造器。
+- **开放重定向**：登录后的 `?redirect=` 只接受站内相对路径
+  （`lib/safe-redirect.ts`），`//host`、`/\host`、反斜杠与控制字符一律回退到 `/`。
+- **字段级数据暴露**：公开接口（`GET /api/users/:username`）返回
+  `toPublicProfile`，不含 `email` 与 `role`；需要邮箱的场景都是
+  「返回调用者自己的数据」。`passwordHash` 从不出现在任何 DTO 中。
+- **页面参数归一化**：Next 对重复 query 参数传数组、`Number('1e999')` 为
+  `Infinity`，都会让页面直接 500。统一经 `lib/search-params.ts` 收口。
+
+### 传输与响应
+
+- 中间件为每个请求生成 nonce 并下发 CSP：`script-src 'self' 'nonce-…' 'strict-dynamic'`、
+  `frame-ancestors 'none'`、`object-src 'none'`、`base-uri 'self'`、`form-action 'self'`。
+  用 nonce 而非 `unsafe-inline`，只有这样 CSP 对 XSS 才真正有效。
+- 另有 `X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、
+  `Referrer-Policy: strict-origin-when-cross-origin`、`Permissions-Policy`，
+  HTTPS 下自动附加 HSTS。
+- API 响应统一 `Cache-Control: no-store` + `Vary: Cookie`，
+  避免共享缓存把 A 的登录态响应发给 B。
 
 ---
 

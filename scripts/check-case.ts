@@ -7,7 +7,7 @@
  *
  *   pnpm exec tsx scripts/check-case.ts
  */
-import { readdirSync, existsSync, statSync } from 'node:fs'
+import { readdirSync, existsSync, readFileSync, statSync } from 'node:fs'
 import { join, dirname, resolve } from 'node:path'
 import { execSync } from 'node:child_process'
 
@@ -108,7 +108,11 @@ function stripComments(source: string): string {
 }
 
 for (const file of files) {
-  const raw = execSync(`cat ${JSON.stringify(file)}`, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 })
+  // 用 readFileSync 而不是 execSync(`cat ...`)：
+  // 后者把「git 里的文件名」拼进 shell 命令，而 JSON.stringify 只转义
+  // 双引号与反斜杠，不转义反引号与 $()。一个带反引号的文件名就能在
+  // CI 上执行任意命令。直接读文件可以彻底移除这个面。
+  const raw = readFileSync(file, 'utf8')
   const source = stripComments(raw)
   const importRe = /(?:from|import)\s+['"]([^'"]+)['"]/g
   let match: RegExpExecArray | null

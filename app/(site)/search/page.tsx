@@ -7,6 +7,7 @@ import { Pagination } from '@/components/pagination'
 import { SearchInput } from '@/components/search-input'
 import { EmptyState, ListSkeleton } from '@/components/ui'
 import { SearchIcon } from '@/components/icons'
+import { page as pageParam, str, type PageSearchParams } from '@/lib/search-params'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,12 +19,12 @@ export const metadata: Metadata = {
 const PAGE_SIZE = 10
 
 interface SearchPageProps {
-  searchParams: { q?: string; page?: string }
+  searchParams: PageSearchParams
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
-  const query = (searchParams.q ?? '').trim()
-  const page = Math.max(1, Number(searchParams.page) || 1)
+  const query = str(searchParams.q)
+  const page = pageParam(searchParams.page)
 
   return (
     <div className="container-narrow py-10">

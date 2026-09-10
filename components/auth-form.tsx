@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { api, ApiError } from '@/lib/api-client'
+import { safeRedirectPath } from '@/lib/safe-redirect'
 import { useToast } from './ui/toast'
 import { Button, Field, Input, Spinner } from './ui'
 
@@ -19,7 +20,8 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const toast = useToast()
-  const redirectTo = searchParams.get('redirect') || '/'
+  // 只接受站内相对路径，避免 ?redirect=https://evil.tld 造成登录后开放重定向
+  const redirectTo = safeRedirectPath(searchParams.get('redirect'))
 
   const [form, setForm] = useState({
     identifier: '',

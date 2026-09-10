@@ -661,7 +661,55 @@ prisma.post.update({ ... }).catch((error) =>
   },
 ]
 
+/** 交互式确认；非 TTY（CI）直接返回 false，强制走显式参数 */
+async function promptConfirm(): Promise<boolean> {
+  if (!process.stdin.isTTY) return false
+  const { createInterface } = await import('node:readline/promises')
+  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  try {
+    const answer = await rl.question(
+      '这会删除全部用户、文章、评论与会话，确认继续？(yes/N) ',
+    )
+    return answer.trim().toLowerCase() === 'yes'
+  } finally {
+    rl.close()
+  }
+}
+
 async function main(): Promise<void> {
+  /*
+   * 安全护栏。
+   *
+   * 这个脚本会**清空所有用户、文章、评论**，并创建一个使用「已公开在
+   * README 里的默认口令」的管理员。误在生产库执行等于删库 + 送出一个
+   * 人人皆知的 admin 账号。所以：
+   *   1. 生产环境直接拒绝，除非显式设置 ALLOW_PROD_SEED=true
+   *   2. 其它环境需要显式确认变量（或交互式回答 y）
+   */
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PROD_SEED !== 'true') {
+    console.error('✗ 拒绝在 NODE_ENV=production 下执行种子脚本（它会清空全部数据）。')
+    console.error('  确实需要时请设置 ALLOW_PROD_SEED=true，并务必同时设置')
+    console.error('  SEED_ADMIN_PASSWORD / SEED_READER_PASSWORD 覆盖默认口令。')
+    process.exit(1)
+  }
+
+  const confirmed =
+    process.env.SEED_CONFIRM === 'yes' || process.argv.includes('--yes') || (await promptConfirm())
+
+  if (!confirmed) {
+    console.error('✗ 已取消。该脚本会删除全部用户、文章、评论与会话。')
+    console.error('  确认执行请加 --yes，或设置 SEED_CONFIRM=yes。')
+    process.exit(1)
+  }
+
+  if (!process.env.SEED_ADMIN_PASSWORD) {
+    console.warn(
+      '\n⚠ 未设置 SEED_ADMIN_PASSWORD，管理员将使用默认口令「%s」（README 中已公开）。\n' +
+        '  仅可用于本地演示，切勿用于任何对外可访问的环境。\n',
+      ADMIN_PASSWORD,
+    )
+  }
+
   console.log('▸ 清理旧数据…')
   await prisma.comment.deleteMany()
   await prisma.postTag.deleteMany()

@@ -64,8 +64,12 @@ export const registerSchema = z.object({
 
 export const loginSchema = z.object({
   /** 支持用户名或邮箱登录 */
-  identifier: z.string().trim().min(1, '请输入用户名或邮箱'),
-  password: z.string().min(1, '请输入密码'),
+  identifier: z.string().trim().min(1, '请输入用户名或邮箱').max(128, '输入过长'),
+  /**
+   * 上限必须有：scrypt 的计算成本随输入长度增长，登录接口若不限制
+   * 输入长度，就成了廉价的 CPU/内存放大器。
+   */
+  password: z.string().min(1, '请输入密码').max(128, '密码最多 128 位'),
 })
 
 export const updateProfileSchema = z.object({
@@ -75,7 +79,7 @@ export const updateProfileSchema = z.object({
 })
 
 export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, '请输入当前密码'),
+  currentPassword: z.string().min(1, '请输入当前密码').max(128, '密码最多 128 位'),
   newPassword: passwordSchema,
 })
 

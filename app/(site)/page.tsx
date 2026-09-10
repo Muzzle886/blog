@@ -6,18 +6,19 @@ import { PostCard } from '@/components/post-card'
 import { Pagination } from '@/components/pagination'
 import { EmptyState, LinkButton } from '@/components/ui'
 import { TagIcon } from '@/components/icons'
+import { optionalStr, page as pageParam, type PageSearchParams } from '@/lib/search-params'
 
 export const dynamic = 'force-dynamic'
 
 const PAGE_SIZE = 8
 
 interface HomeProps {
-  searchParams: { page?: string; tag?: string }
+  searchParams: PageSearchParams
 }
 
 export default async function HomePage({ searchParams }: HomeProps) {
-  const page = Math.max(1, Number(searchParams.page) || 1)
-  const tag = searchParams.tag
+  const page = pageParam(searchParams.page)
+  const tag = optionalStr(searchParams.tag)
 
   const [viewer, { items, meta }, tags] = await Promise.all([
     getCurrentUser(),

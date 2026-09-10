@@ -5,6 +5,7 @@ import { Marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
 import DOMPurify from 'dompurify'
+import { PURIFY_CONFIG, installPurifyHooks } from '@/lib/sanitize-config'
 
 /**
  * 编辑器右侧的实时预览。
@@ -23,25 +24,8 @@ const marked = new Marked(
 )
 marked.setOptions({ gfm: true, breaks: true })
 
-const PURIFY_CONFIG = {
-  ALLOWED_TAGS: [
-    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'p', 'br', 'hr', 'blockquote', 'pre', 'code',
-    'ul', 'ol', 'li', 'dl', 'dt', 'dd',
-    'a', 'strong', 'em', 'del', 's', 'sub', 'sup', 'mark', 'kbd', 'abbr',
-    'table', 'thead', 'tbody', 'tr', 'th', 'td',
-    'img', 'figure', 'figcaption',
-    'span', 'div', 'input',
-  ],
-  ALLOWED_ATTR: [
-    'href', 'title', 'alt', 'src', 'class', 'id',
-    'align', 'colspan', 'rowspan', 'target', 'rel',
-    'type', 'checked', 'disabled', 'start',
-  ],
-  ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|tel:|#|\/)/i,
-  FORBID_TAGS: ['style', 'script', 'iframe', 'form', 'object', 'embed'],
-  FORBID_ATTR: ['style', 'onerror', 'onload', 'onclick'],
-}
+installPurifyHooks(DOMPurify)
+
 
 export function MarkdownPreview({ source }: { source: string }) {
   // 防抖：避免每次按键都重跑高亮

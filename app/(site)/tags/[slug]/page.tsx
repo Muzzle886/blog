@@ -9,6 +9,7 @@ import { PostCard } from '@/components/post-card'
 import { Pagination } from '@/components/pagination'
 import { ArrowLeftIcon } from '@/components/icons'
 import { EmptyState } from '@/components/ui'
+import { page as pageParam, type PageSearchParams } from '@/lib/search-params'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +17,7 @@ const PAGE_SIZE = 10
 
 interface TagPageProps {
   params: { slug: string }
-  searchParams: { page?: string }
+  searchParams: PageSearchParams
 }
 
 export async function generateMetadata({ params }: TagPageProps): Promise<Metadata> {
@@ -30,7 +31,7 @@ export async function generateMetadata({ params }: TagPageProps): Promise<Metada
 
 export default async function TagDetailPage({ params, searchParams }: TagPageProps) {
   const slug = decodeURIComponent(params.slug)
-  const page = Math.max(1, Number(searchParams.page) || 1)
+  const page = pageParam(searchParams.page)
 
   let tag
   try {

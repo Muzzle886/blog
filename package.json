@@ -11,17 +11,18 @@
     "db:init": "tsx scripts/init-db.ts",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "tsx prisma/seed.ts --yes",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset --force",
     "test:api": "bash scripts/e2e.sh",
     "test:design": "tsx scripts/design-audit.ts",
     "test:case": "tsx scripts/check-case.ts",
-    "test": "tsx scripts/check-case.ts && bash scripts/e2e.sh && tsx scripts/design-audit.ts",
-    "shots": "tsx scripts/screenshot.ts"
+    "test": "tsx scripts/check-case.ts && bash scripts/security-check.sh && bash scripts/e2e.sh && tsx scripts/design-audit.ts",
+    "shots": "tsx scripts/screenshot.ts",
+    "test:security": "bash scripts/security-check.sh"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts --yes"
   },
   "dependencies": {
     "@prisma/client": "5.19.1",

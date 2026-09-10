@@ -26,9 +26,9 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
-.env
-.env.local
-.env*.local
+# 用通配符覆盖 .env.production / .env.development / .env.test 等，
+# 只显式放行模板文件 —— 否则将来新增的 .env.production 会被提交进公开仓库
+.env*
 !.env.example
 
 # prisma
