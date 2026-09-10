@@ -68,16 +68,13 @@ export function SettingsForm({ user }: { user: PublicUser }) {
         newPassword: passwords.newPassword,
       })
       toast.success('密码已修改，请重新登录')
-      // 后端会注销当前会话，跳转到登录页
       router.push('/login')
       router.refresh()
     } catch (error) {
       if (error instanceof ApiError) {
-        if (error.details?.length) {
-          setPasswordError(error.details.map((d) => d.message).join('；'))
-        } else {
-          setPasswordError(error.message)
-        }
+        setPasswordError(
+          error.details?.length ? error.details.map((d) => d.message).join('；') : error.message,
+        )
       } else {
         setPasswordError('修改失败')
       }
@@ -86,9 +83,10 @@ export function SettingsForm({ user }: { user: PublicUser }) {
     }
   }
 
+  /** 分栏切换：用文字激活态（字重 + 下划线）替代按钮组 */
   return (
     <div>
-      <div className="mb-6 flex gap-1 border-b border-ink-200 dark:border-ink-800">
+      <div className="flex gap-8 border-b border-ink-line dark:border-night-line">
         {(
           [
             ['profile', '基本资料'],
@@ -99,10 +97,11 @@ export function SettingsForm({ user }: { user: PublicUser }) {
             key={value}
             type="button"
             onClick={() => setTab(value)}
+            aria-current={tab === value ? 'true' : undefined}
             className={
               tab === value
-                ? '-mb-px border-b-2 border-ink-900 px-3 py-2 text-sm font-medium text-ink-900 dark:border-ink-100 dark:text-ink-100'
-                : '-mb-px border-b-2 border-transparent px-3 py-2 text-sm text-ink-500 transition-colors hover:text-ink-800 dark:text-ink-400 dark:hover:text-ink-200'
+                ? '-mb-px border-b border-accent pb-3 font-sans text-sm font-medium text-accent'
+                : '-mb-px border-b border-transparent pb-3 font-sans text-sm text-ink-muted transition-colors hover:text-accent dark:text-ink-faint'
             }
           >
             {label}
@@ -111,7 +110,7 @@ export function SettingsForm({ user }: { user: PublicUser }) {
       </div>
 
       {tab === 'profile' ? (
-        <form onSubmit={saveProfile} className="max-w-md space-y-4" noValidate>
+        <form onSubmit={saveProfile} className="mt-10 max-w-md space-y-8" noValidate>
           <Field label="用户名" hint="用户名不可修改">
             <Input value={user.username} disabled />
           </Field>
@@ -150,23 +149,20 @@ export function SettingsForm({ user }: { user: PublicUser }) {
             />
           </Field>
 
-          <div className="flex items-center gap-3 pt-1">
+          <div className="flex items-center gap-6 pt-2">
             <Button type="submit" variant="primary" disabled={savingProfile}>
-              {savingProfile && <Spinner className="h-3.5 w-3.5" />}
-              保存修改
+              {savingProfile && <Spinner />}
+              保存
             </Button>
-            <a
-              href={`/users/${user.username}`}
-              className="text-xs text-accent hover:underline"
-            >
+            <a href={`/users/${user.username}`} className="link font-sans text-xs">
               查看公开主页
             </a>
           </div>
         </form>
       ) : (
-        <form onSubmit={savePassword} className="max-w-md space-y-4" noValidate>
+        <form onSubmit={savePassword} className="mt-10 max-w-md space-y-8" noValidate>
           {passwordError && (
-            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-400">
+            <p className="border-l-2 border-red-600 pl-4 font-sans text-sm text-red-700 dark:text-red-400">
               {passwordError}
             </p>
           )}
@@ -183,12 +179,7 @@ export function SettingsForm({ user }: { user: PublicUser }) {
             />
           </Field>
 
-          <Field
-            label="新密码"
-            htmlFor="newPassword"
-            required
-            hint="至少 8 位，需同时包含字母和数字"
-          >
+          <Field label="新密码" htmlFor="newPassword" required hint="至少 8 位，需同时包含字母和数字">
             <Input
               id="newPassword"
               type="password"
@@ -206,13 +197,11 @@ export function SettingsForm({ user }: { user: PublicUser }) {
               type="password"
               autoComplete="new-password"
               value={passwords.confirm}
-              onChange={(event) =>
-                setPasswords((prev) => ({ ...prev, confirm: event.target.value }))
-              }
+              onChange={(event) => setPasswords((prev) => ({ ...prev, confirm: event.target.value }))}
             />
           </Field>
 
-          <div className="pt-1">
+          <div className="pt-2">
             <Button
               type="submit"
               variant="primary"
@@ -223,10 +212,12 @@ export function SettingsForm({ user }: { user: PublicUser }) {
                 !passwords.confirm
               }
             >
-              {savingPassword && <Spinner className="h-3.5 w-3.5" />}
+              {savingPassword && <Spinner />}
               修改密码
             </Button>
-            <p className="mt-2 text-xs hint">修改成功后当前会话会失效，需要重新登录。</p>
+            <p className="mt-3 font-sans text-xs text-ink-faint dark:text-ink-muted">
+              修改成功后本账号的其它登录会话都会失效。
+            </p>
           </div>
         </form>
       )}

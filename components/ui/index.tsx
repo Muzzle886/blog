@@ -9,31 +9,31 @@ import type {
   TextareaHTMLAttributes,
 } from 'react'
 import { cn } from '@/lib/cn'
-import { AlertIcon, InboxIcon } from '@/components/icons'
 
-/* ============================== Button ============================== */
+/* ==========================================================================
+ * 基础控件
+ *
+ * 风格约定（与旧版刻意相反）：
+ *  - 没有"卡片"容器；控件不描边、不填色，靠排版与一条底线区分
+ *  - 主按钮是页面上唯一"重"的元素（实心墨色），其余一律是文字
+ *  - 圆角只有 2–3px，接近方正
+ * ========================================================================== */
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
-type Size = 'sm' | 'md'
+type Variant = 'primary' | 'outline' | 'ghost' | 'danger'
+type Size = 'sm' | 'md' | 'lg'
 
 const VARIANTS: Record<Variant, string> = {
-  primary:
-    'bg-ink-900 text-white hover:bg-ink-800 dark:bg-ink-100 dark:text-ink-900 dark:hover:bg-white',
-  secondary:
-    'border border-ink-200 bg-white text-ink-700 hover:border-ink-300 hover:bg-ink-50 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-200 dark:hover:border-ink-600 dark:hover:bg-ink-800',
-  ghost:
-    'text-ink-600 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-ink-100',
-  danger:
-    'border border-red-200 bg-white text-red-600 hover:bg-red-50 dark:border-red-900/60 dark:bg-transparent dark:text-red-400 dark:hover:bg-red-950/40',
+  primary: 'btn-primary',
+  outline: 'btn-outline',
+  ghost: 'btn-ghost',
+  danger: 'btn-ghost text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300',
 }
 
 const SIZES: Record<Size, string> = {
-  sm: 'h-8 px-3 text-[13px] gap-1.5',
-  md: 'h-9 px-4 text-sm gap-2',
+  sm: 'px-3 py-1.5 text-xs',
+  md: 'px-4 py-2 text-sm',
+  lg: 'px-5 py-2.5 text-sm',
 }
-
-const BASE =
-  'inline-flex select-none items-center justify-center rounded-md font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant
@@ -41,15 +41,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', size = 'md', className, children, ...props },
+  { variant = 'outline', size = 'md', className, children, ...props },
   ref,
 ) {
   return (
-    <button
-      ref={ref}
-      className={cn(BASE, VARIANTS[variant], SIZES[size], className)}
-      {...props}
-    >
+    <button ref={ref} className={cn('btn', SIZES[size], VARIANTS[variant], className)} {...props}>
       {children}
     </button>
   )
@@ -64,20 +60,18 @@ interface LinkButtonProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
 
 export function LinkButton({
   href,
-  variant = 'secondary',
+  variant = 'outline',
   size = 'md',
   className,
   children,
   ...props
 }: LinkButtonProps) {
   return (
-    <Link href={href} className={cn(BASE, VARIANTS[variant], SIZES[size], className)} {...props}>
+    <Link href={href} className={cn('btn', SIZES[size], VARIANTS[variant], className)} {...props}>
       {children}
     </Link>
   )
 }
-
-/* ============================== Field ============================== */
 
 interface FieldProps {
   label?: string
@@ -90,74 +84,64 @@ interface FieldProps {
 
 export function Field({ label, htmlFor, error, hint, required, children }: FieldProps) {
   return (
-    <div>
+    <div className="space-y-1.5">
       {label && (
-        <label className="label" htmlFor={htmlFor}>
+        <label htmlFor={htmlFor} className="eyebrow block">
           {label}
-          {required && <span className="ml-0.5 text-red-500">*</span>}
+          {required && <span className="ml-1 text-accent">*</span>}
         </label>
       )}
       {children}
       {error ? (
-        <p className="mt-1.5 flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
-          <AlertIcon className="h-3.5 w-3.5 shrink-0" />
-          {error}
-        </p>
+        <p className="font-sans text-xs text-red-700 dark:text-red-400">{error}</p>
       ) : hint ? (
-        <p className="mt-1.5 hint">{hint}</p>
+        <p className="font-sans text-xs text-ink-faint dark:text-ink-muted">{hint}</p>
       ) : null}
     </div>
   )
 }
 
-const CONTROL =
-  'w-full rounded-md border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900 placeholder:text-ink-400 transition-colors duration-150 hover:border-ink-300 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:bg-ink-50 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100 dark:placeholder:text-ink-500 dark:hover:border-ink-600 dark:disabled:bg-ink-800'
-
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...props }, ref) {
-    return <input ref={ref} className={cn(CONTROL, 'h-9', className)} {...props} />
+    return <input ref={ref} className={cn('field', className)} {...props} />
   },
 )
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
   function Textarea({ className, ...props }, ref) {
-    return <textarea ref={ref} className={cn(CONTROL, 'resize-y', className)} {...props} />
+    return <textarea ref={ref} className={cn('field resize-y', className)} {...props} />
   },
 )
 
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
   function Select({ className, children, ...props }, ref) {
     return (
-      <select ref={ref} className={cn(CONTROL, 'h-9 cursor-pointer pr-8', className)} {...props}>
+      <select ref={ref} className={cn('field cursor-pointer', className)} {...props}>
         {children}
       </select>
     )
   },
 )
 
-/* ============================== Badge / Tag ============================== */
-
+/** 行内小标记：靠字距与字号区分，不加边框 */
 export function Badge({
   children,
-  className,
+  tone = 'neutral',
 }: {
   children: ReactNode
-  className?: string
+  tone?: 'neutral' | 'accent' | 'warn'
 }) {
+  const tones = {
+    neutral: 'text-ink-faint dark:text-ink-muted',
+    accent: 'text-accent',
+    warn: 'text-amber-700 dark:text-amber-500',
+  }
   return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded border border-ink-200 px-1.5 py-0.5 text-2xs font-medium text-ink-500 dark:border-ink-700 dark:text-ink-400',
-        className,
-      )}
-    >
-      {children}
-    </span>
+    <span className={cn('font-sans text-2xs font-medium uppercase', tones[tone])}>{children}</span>
   )
 }
 
-/* ============================== Empty / Skeleton ============================== */
-
+/** 空状态：一段排版，而不是一个虚线框 */
 export function EmptyState({
   title,
   description,
@@ -168,11 +152,14 @@ export function EmptyState({
   action?: ReactNode
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-ink-200 px-6 py-16 text-center dark:border-ink-800">
-      <InboxIcon className="h-7 w-7 text-ink-300 dark:text-ink-600" />
-      <p className="mt-3 text-sm font-medium text-ink-700 dark:text-ink-300">{title}</p>
-      {description && <p className="mt-1 max-w-sm text-xs hint">{description}</p>}
-      {action && <div className="mt-5">{action}</div>}
+    <div className="border-t border-ink-line py-20 dark:border-night-line">
+      <p className="font-serif text-xl text-ink-strong dark:text-white">{title}</p>
+      {description && (
+        <p className="mt-2 max-w-md font-sans text-sm text-ink-muted dark:text-ink-faint">
+          {description}
+        </p>
+      )}
+      {action && <div className="mt-6">{action}</div>}
     </div>
   )
 }
@@ -181,7 +168,9 @@ export function Spinner({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        'inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent',
+        // 圆形是 spinner 的语义需求；设计令牌里只有 2–3px 两档圆角，
+        // 因此这里用任意值显式表达「全圆」，不额外新增圆角令牌
+        'inline-block h-3.5 w-3.5 animate-spin rounded-[9999px] border border-current border-t-transparent',
         className,
       )}
       aria-hidden="true"
@@ -189,17 +178,28 @@ export function Spinner({ className }: { className?: string }) {
   )
 }
 
+/** 列表骨架：保持与新排版一致的纵向节奏 */
 export function ListSkeleton({ rows = 4 }: { rows?: number }) {
   return (
-    <div className="space-y-4" aria-hidden="true">
+    <div aria-hidden="true">
       {Array.from({ length: rows }).map((_, index) => (
-        <div key={index} className="card p-5">
-          <div className="skeleton h-4 w-2/5" />
-          <div className="skeleton mt-3 h-3 w-full" />
-          <div className="skeleton mt-2 h-3 w-4/5" />
-          <div className="skeleton mt-4 h-3 w-24" />
+        <div key={index} className="border-t border-ink-line py-7 dark:border-night-line">
+          <div className="skeleton h-3 w-24" />
+          <div className="skeleton mt-4 h-6 w-3/5" />
+          <div className="skeleton mt-3 h-4 w-full" />
+          <div className="skeleton mt-2 h-4 w-4/5" />
         </div>
       ))}
+    </div>
+  )
+}
+
+/** 栏目名：左侧一小段竖线 + 全大写小字 */
+export function SectionLabel({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div className={cn('flex items-center gap-3', className)}>
+      <span className="h-3 w-px bg-accent" aria-hidden="true" />
+      <span className="eyebrow">{children}</span>
     </div>
   )
 }

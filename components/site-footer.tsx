@@ -2,24 +2,28 @@ import Link from 'next/link'
 
 const YEAR = new Date().getFullYear()
 
+const LINKS = [
+  { href: '/writing', label: '文章' },
+  { href: '/topics', label: '主题' },
+  { href: '/timeline', label: '时间线' },
+  { href: '/about', label: '关于' },
+]
+
+/** 页脚：一条细线 + 单行文字，不做多栏站点地图 */
 export function SiteFooter({ siteName }: { siteName: string }) {
   return (
-    <footer className="mt-20 border-t border-ink-200 dark:border-ink-800">
-      <div className="container-page flex flex-col gap-3 py-8 text-xs text-ink-400 sm:flex-row sm:items-center sm:justify-between dark:text-ink-500">
-        <p>
-          © {YEAR} {siteName} · 由 Next.js 与 Prisma 驱动
+    <footer className="mt-24 border-t border-ink-line dark:border-night-line">
+      <div className="shell flex flex-col gap-4 py-10 sm:flex-row sm:items-center sm:justify-between">
+        <p className="font-sans text-xs text-ink-faint dark:text-ink-muted">
+          © {YEAR} {siteName}
         </p>
-        <div className="flex items-center gap-4">
-          <Link href="/about" className="transition-colors hover:text-ink-700 dark:hover:text-ink-300">
-            关于
-          </Link>
-          <Link href="/archive" className="transition-colors hover:text-ink-700 dark:hover:text-ink-300">
-            归档
-          </Link>
-          <Link href="/api/stats" className="transition-colors hover:text-ink-700 dark:hover:text-ink-300">
-            API
-          </Link>
-        </div>
+        <nav className="flex gap-6" aria-label="页脚导航">
+          {LINKS.map((item) => (
+            <Link key={item.href} href={item.href} className="tag">
+              {item.label}
+            </Link>
+          ))}
+        </nav>
       </div>
     </footer>
   )

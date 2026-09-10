@@ -18,7 +18,7 @@ export default async function LoginPage() {
 
   return (
     <AuthShell title="欢迎回来" subtitle="登录后可以发表文章与评论">
-      <Suspense fallback={<div className="skeleton h-64 w-full rounded-lg" />}>
+      <Suspense fallback={<div className="skeleton h-64 w-full rounded-sm" />}>
         <AuthForm mode="login" />
       </Suspense>
     </AuthShell>

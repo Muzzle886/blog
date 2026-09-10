@@ -163,9 +163,9 @@ async function main(): Promise<void> {
 
   const { post: POST_SLUG, tag: TAG_SLUG } = await resolveFixtures()
   const POST_PATH = `/posts/${POST_SLUG}`
-  const TAG_PATH = `/tags/${encodeURIComponent(TAG_SLUG)}`
+  const TOPIC_PATH = `/topics/${encodeURIComponent(TAG_SLUG)}`
   console.log(`\n站点：${BASE}\n用例文章 slug=${POST_SLUG}，标签 slug=${TAG_SLUG}`)
-  const PAGES = ['/', POST_PATH, '/tags', TAG_PATH, '/archive', '/about', '/search?q=Prisma', '/admin/posts']
+  const PAGES = ['/', '/writing', POST_PATH, '/topics', TOPIC_PATH, '/timeline', '/about', '/search?q=Prisma', '/admin/posts']
 
   section('1. 扁平风格：无阴影、小圆角')
   for (const path of PAGES) {
@@ -188,16 +188,20 @@ async function main(): Promise<void> {
   }
 
   section('2. 色板收敛：只允许中性色 + 强调/语义色')
+  /*
+   * 新设计（编辑/杂志风）允许的高饱和色白名单。
+   * 实测全站只有 accent 一个高饱和色出现，这里保留它以及语义色
+   * （错误红 / 成功绿 / 警告琥珀），出现名单之外的色即视为色板漂移。
+   */
   const ALLOWED_SATURATED_PREFIXES = [
-    'rgb(37, 99, 235)',    // accent 蓝
-    'rgb(29, 78, 216)',    // accent-strong
-    'rgb(220, 38, 38)',    // 危险红
-    'rgb(185, 28, 28)',
-    'rgb(22, 163, 74)',    // 成功绿
+    'rgb(176, 81, 42)',   // accent 赭石
+    'rgb(143, 63, 31)',   // accent-strong
+    'rgb(185, 28, 28)',   // 错误红
+    'rgb(220, 38, 38)',
+    'rgb(22, 163, 74)',   // 成功绿
     'rgb(16, 185, 129)',
-    'rgb(217, 119, 6)',    // 警告琥珀
+    'rgb(217, 119, 6)',   // 警告琥珀
     'rgb(180, 83, 9)',
-    'rgb(239, 68, 68)',
   ]
   for (const path of PAGES) {
     await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' })
@@ -209,6 +213,55 @@ async function main(): Promise<void> {
       `${path} 无计划外的高饱和色`,
       unexpected.length === 0,
       unexpected.length ? `发现 ${unexpected.slice(0, 4).join(', ')}` : `(${styles.saturatedColors.length} 个有色值)`,
+    )
+  }
+
+  section('2b. 编辑风格：衬线标题 / 暖色底 / 单一强调色')
+
+  for (const path of ['/', '/writing', POST_PATH, '/about']) {
+    await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' })
+    const editorial = await evalExpr(page, () => {
+      const parse = (color: string) => {
+        const match = color.match(/rgba?\(([^)]+)\)/)
+        if (!match) return null
+        return match[1].split(',').slice(0, 3).map((value) => Number.parseFloat(value.trim()))
+      }
+      const heading = document.querySelector('h1, h2, h3')
+      const bodyStyle = getComputedStyle(document.body)
+      const bg = parse(bodyStyle.backgroundColor)
+      const headingFont = heading ? getComputedStyle(heading).fontFamily : ''
+
+      // 统计圆角：编辑风格应当几乎没有圆角
+      const radii = new Set<string>()
+      for (const node of Array.from(document.querySelectorAll<HTMLElement>('body *'))) {
+        const style = getComputedStyle(node)
+        const rect = node.getBoundingClientRect()
+        if (style.display === 'none' || rect.width === 0) continue
+        for (const value of [style.borderRadius, style.borderTopLeftRadius]) {
+          const px = Number.parseFloat(value)
+          if (!Number.isNaN(px) && px > 0) radii.add(String(Math.round(px)))
+        }
+      }
+
+      return {
+        headingFont,
+        bg,
+        // 是否有 h1（页面没渲染出来时会是 0）
+        h1Count: document.querySelectorAll('h1').length,
+        radii: Array.from(radii).map(Number).sort((a, b) => a - b),
+      }
+    })
+
+    check(`${path} 标题使用衬线体`, /Songti|Serif|serif|Georgia/i.test(editorial.headingFont), editorial.headingFont.slice(0, 34))
+    check(
+      `${path} 底色为暖白而非纯白`,
+      Boolean(editorial.bg && editorial.bg[0] > 240 && editorial.bg[0] >= editorial.bg[2] && editorial.bg[2] < 252),
+      editorial.bg ? `rgb(${editorial.bg.map(Math.round).join(', ')})` : '取不到',
+    )
+    check(
+      `${path} 页面已渲染（存在 h1）`,
+      editorial.h1Count >= 1,
+      `h1 数量 ${editorial.h1Count}`,
     )
   }
 
@@ -260,7 +313,7 @@ async function main(): Promise<void> {
   section('4. 响应式：无横向溢出')
   for (const width of [320, 375, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 })
-    for (const path of ['/', POST_PATH, '/tags', '/admin/posts']) {
+    for (const path of ['/', '/writing', POST_PATH, '/topics', '/timeline', '/admin/posts']) {
       await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' })
       const overflow = await evalExpr(page, () => {
         const doc = document.documentElement

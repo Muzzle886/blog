@@ -23,8 +23,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: `${BASE_URL}/`, changeFrequency: 'daily', priority: 1 },
-    { url: `${BASE_URL}/tags`, changeFrequency: 'weekly', priority: 0.8 },
-    { url: `${BASE_URL}/archive`, changeFrequency: 'weekly', priority: 0.7 },
+    { url: `${BASE_URL}/writing`, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE_URL}/topics`, changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${BASE_URL}/timeline`, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${BASE_URL}/about`, changeFrequency: 'monthly', priority: 0.5 },
   ]
 
@@ -37,7 +38,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
     })),
     ...tags.map((tag) => ({
-      url: `${BASE_URL}/tags/${encodeURIComponent(tag.slug)}`,
+      url: `${BASE_URL}/topics/${encodeURIComponent(tag.slug)}`,
       changeFrequency: 'weekly' as const,
       priority: 0.6,
     })),

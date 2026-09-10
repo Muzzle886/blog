@@ -6,8 +6,7 @@ import { useState } from 'react'
 import type { PostSummary } from '@/lib/types'
 import { api } from '@/lib/api-client'
 import { formatDate } from '@/lib/format'
-import { PenIcon, TrashIcon } from '@/components/icons'
-import { Badge, EmptyState, LinkButton, Select } from '@/components/ui'
+import { Button, EmptyState, LinkButton, Select } from '@/components/ui'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useToast } from '@/components/ui/toast'
 
@@ -20,6 +19,11 @@ interface AdminPostListProps {
   viewerId: number
 }
 
+/**
+ * 文章管理列表。
+ * 与前台列表同一套排版语言：一条细分隔线 + 衬线标题，
+ * 状态/数据压成小字；操作项默认隐藏，hover 才出现。
+ */
 export function AdminPostList({
   posts: initialPosts,
   total,
@@ -52,27 +56,29 @@ export function AdminPostList({
 
   return (
     <div>
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <Select
-          value={status}
-          onChange={(event) => {
-            const value = event.target.value
-            router.push(value === 'ALL' ? '/admin/posts' : `/admin/posts?status=${value}`)
-          }}
-          className="w-36"
-          aria-label="筛选状态"
-        >
-          <option value="ALL">全部状态</option>
-          <option value="PUBLISHED">已发布</option>
-          <option value="DRAFT">草稿</option>
-        </Select>
+      <div className="flex flex-wrap items-center gap-6 pb-8">
+        <label className="flex items-center gap-3">
+          <span className="eyebrow">状态</span>
+          <Select
+            value={status}
+            onChange={(event) => {
+              const value = event.target.value
+              router.push(value === 'ALL' ? '/admin/posts' : `/admin/posts?status=${value}`)
+            }}
+            className="w-32 py-1 text-sm"
+            aria-label="筛选状态"
+          >
+            <option value="ALL">全部</option>
+            <option value="PUBLISHED">已发布</option>
+            <option value="DRAFT">草稿</option>
+          </Select>
+        </label>
 
-        <p className="text-sm text-ink-500 dark:text-ink-400">
-          共 <span className="font-medium text-ink-800 dark:text-ink-200">{total}</span> 篇
+        <p className="meta">
+          共 {total} 篇
         </p>
 
         <LinkButton href="/write" size="sm" variant="primary" className="ml-auto">
-          <PenIcon className="h-3.5 w-3.5" />
           写新文章
         </LinkButton>
       </div>
@@ -88,56 +94,52 @@ export function AdminPostList({
           }
         />
       ) : (
-        <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+        <ul>
           {posts.map((post) => (
-            <li key={post.id} className="group flex items-center gap-4 py-4">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge
-                    className={
-                      post.status === 'PUBLISHED'
-                        ? 'border-emerald-300 text-emerald-700 dark:border-emerald-800 dark:text-emerald-500'
-                        : 'border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-500'
-                    }
-                  >
-                    {post.status === 'PUBLISHED' ? '已发布' : '草稿'}
-                  </Badge>
-                  {post.author.id !== viewerId && (
-                    <Badge>协作者 · {post.author.nickname}</Badge>
-                  )}
-                  <Link
-                    href={
-                      post.status === 'PUBLISHED' ? `/posts/${post.slug}` : `/write/${post.slug}`
-                    }
-                    className="truncate text-sm font-medium text-ink-900 transition-colors hover:text-accent dark:text-ink-100"
-                  >
-                    {post.title}
-                  </Link>
-                </div>
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-400 dark:text-ink-500">
-                  <span>
-                    {post.status === 'PUBLISHED'
-                      ? `发布于 ${formatDate(post.publishedAt)}`
-                      : `更新于 ${formatDate(post.updatedAt)}`}
-                  </span>
-                  <span>{post.views} 次阅读</span>
-                  <span>{post.commentCount ?? 0} 条评论</span>
-                  {post.tags.length > 0 && <span>{post.tags.map((tag) => tag.name).join(' · ')}</span>}
-                </div>
-              </div>
+            <li
+              key={post.id}
+              className="group border-t border-ink-line py-6 dark:border-night-line"
+            >
+              <div className="flex items-baseline gap-4">
+                <span className="meta w-24 shrink-0">
+                  {post.status === 'PUBLISHED' ? '已发布' : '草稿'}
+                </span>
 
-              <div className="flex shrink-0 items-center gap-1">
-                <LinkButton href={`/write/${post.slug}`} size="sm">
-                  编辑
-                </LinkButton>
-                <button
-                  type="button"
-                  onClick={() => setPending(post)}
-                  aria-label={`删除 ${post.title}`}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
-                >
-                  <TrashIcon className="h-4 w-4" />
-                </button>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-serif text-lg leading-snug">
+                    <Link
+                      href={post.status === 'PUBLISHED' ? `/posts/${post.slug}` : `/write/${post.slug}`}
+                      className="text-ink-strong transition-colors hover:text-accent dark:text-white"
+                    >
+                      {post.title}
+                    </Link>
+                  </h3>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span className="meta">
+                      {post.status === 'PUBLISHED'
+                        ? `发布于 ${formatDate(post.publishedAt)}`
+                        : `更新于 ${formatDate(post.updatedAt)}`}
+                    </span>
+                    <span className="meta">{post.views} 次阅读</span>
+                    <span className="meta">{post.commentCount ?? 0} 条评论</span>
+                    {post.author.id !== viewerId && (
+                      <span className="meta">协作者 {post.author.nickname}</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 items-baseline gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                  <Link href={`/write/${post.slug}`} className="tag">
+                    编辑
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setPending(post)}
+                    className="font-sans text-xs text-ink-faint transition-colors hover:text-red-700 dark:hover:text-red-400"
+                  >
+                    删除
+                  </button>
+                </div>
               </div>
             </li>
           ))}
@@ -145,27 +147,25 @@ export function AdminPostList({
       )}
 
       {totalPages > 1 && (
-        <div className="mt-8 flex items-center justify-center gap-3 text-sm">
-          {page > 1 && (
-            <Link
-              href={`/admin/posts?${buildQuery(status, page - 1)}`}
-              className="nav-link"
-            >
-              上一页
+        <nav className="mt-10 flex items-center justify-between border-t border-ink-line pt-6 dark:border-night-line">
+          {page > 1 ? (
+            <Link href={`/admin/posts?${buildQuery(status, page - 1)}`} className="nav-item">
+              ← 上一页
             </Link>
+          ) : (
+            <span className="font-sans text-sm text-ink-faint/60 dark:text-ink-muted/50">← 上一页</span>
           )}
-          <span className="text-xs hint">
-            第 {page} / {totalPages} 页
+          <span className="font-mono text-xs text-ink-faint dark:text-ink-muted">
+            {page} / {totalPages}
           </span>
-          {page < totalPages && (
-            <Link
-              href={`/admin/posts?${buildQuery(status, page + 1)}`}
-              className="nav-link"
-            >
-              下一页
+          {page < totalPages ? (
+            <Link href={`/admin/posts?${buildQuery(status, page + 1)}`} className="nav-item">
+              下一页 →
             </Link>
+          ) : (
+            <span className="font-sans text-sm text-ink-faint/60 dark:text-ink-muted/50">下一页 →</span>
           )}
-        </div>
+        </nav>
       )}
 
       <ConfirmDialog

@@ -9,7 +9,7 @@ import { PURIFY_CONFIG, installPurifyHooks } from '@/lib/sanitize-config'
 
 /**
  * 编辑器右侧的实时预览。
- * 与 lib/markdown.ts 使用同一套 marked 配置与清洗白名单，
+ * 清洗配置来自 lib/sanitize-config.ts（与线上渲染同一份），
  * 保证「预览所见」与「保存后渲染」一致。仅在客户端运行。
  */
 const marked = new Marked(
@@ -26,9 +26,7 @@ marked.setOptions({ gfm: true, breaks: true })
 
 installPurifyHooks(DOMPurify)
 
-
 export function MarkdownPreview({ source }: { source: string }) {
-  // 防抖：避免每次按键都重跑高亮
   const [debounced, setDebounced] = useState(source)
 
   useEffect(() => {
@@ -44,17 +42,15 @@ export function MarkdownPreview({ source }: { source: string }) {
 
   if (!html) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center">
-        <p className="text-sm text-ink-400 dark:text-ink-500">
-          预览区 · 开始输入 Markdown 即可看到效果
-        </p>
-      </div>
+      <p className="font-sans text-sm text-ink-faint dark:text-ink-muted">
+        预览区 · 开始输入即可看到排版效果
+      </p>
     )
   }
 
   return (
     <div
-      className="markdown-body px-6 py-6"
+      className="markdown-body reading"
       // 内容已通过 DOMPurify 白名单清洗
       dangerouslySetInnerHTML={{ __html: html }}
     />

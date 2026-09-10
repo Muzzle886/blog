@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import '@/styles/markdown.css'
-import { ThemeScript, getNonce } from '@/components/theme-script'
+import { ThemeScript } from '@/components/theme-script'
 import { ToastProvider } from '@/components/ui/toast'
 
 const siteName = process.env.NEXT_PUBLIC_SITE_NAME || "Muzzle's Blog"
@@ -22,13 +22,11 @@ export const metadata: Metadata = {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  // nonce 由 middleware.ts 生成并通过 x-nonce 头透传，供内联主题脚本通过 CSP
-  const nonce = getNonce()
-
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
-        <ThemeScript nonce={nonce} />
+        {/* nonce 由 ThemeScript 自行按环境读取，避免 dev 下的属性不匹配告警 */}
+        <ThemeScript />
       </head>
       <body className="font-sans">
         <ToastProvider>{children}</ToastProvider>

@@ -1,7 +1,6 @@
 'use client'
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
-import { AlertIcon, CheckIcon, CloseIcon } from '@/components/icons'
 import { cn } from '@/lib/cn'
 
 type ToastKind = 'success' | 'error' | 'info'
@@ -22,6 +21,10 @@ const ToastContext = createContext<ToastContextValue | null>(null)
 
 const DURATION = 3200
 
+/**
+ * 提示条。不放图标、不加阴影：左侧一条彩色短线表示语义，
+ * 其余交给排版 —— 与全站"无卡片"的语言一致。
+ */
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
@@ -47,40 +50,36 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [toast],
   )
 
+  const bar = {
+    success: 'bg-emerald-600 dark:bg-emerald-500',
+    error: 'bg-red-600 dark:bg-red-500',
+    info: 'bg-accent',
+  }
+
   return (
     <ToastContext.Provider value={value}>
       {children}
-      {/* 固定右下角，不阻塞交互 */}
       <div
-        className="pointer-events-none fixed bottom-5 right-5 z-50 flex w-[min(22rem,calc(100vw-2.5rem))] flex-col gap-2"
+        className="pointer-events-none fixed bottom-6 right-6 z-50 flex w-[min(22rem,calc(100vw-3rem))] flex-col gap-2"
         role="status"
         aria-live="polite"
       >
         {toasts.map((item) => (
           <div
             key={item.id}
-            className={cn(
-              'pointer-events-auto flex animate-fade-in items-start gap-2 rounded-lg border px-3.5 py-2.5 text-sm shadow-sm',
-              item.kind === 'error'
-                ? 'border-red-200 bg-white text-red-700 dark:border-red-900/60 dark:bg-ink-900 dark:text-red-400'
-                : 'border-ink-200 bg-white text-ink-800 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100',
-            )}
+            className="pointer-events-auto flex animate-rise items-stretch border border-ink-line bg-paper-raised dark:border-night-line dark:bg-night-raised"
           >
-            <span className="mt-0.5 shrink-0">
-              {item.kind === 'error' ? (
-                <AlertIcon className="h-4 w-4" />
-              ) : (
-                <CheckIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              )}
-            </span>
-            <span className="flex-1 leading-snug">{item.message}</span>
+            <span className={cn('w-0.5 shrink-0', bar[item.kind])} aria-hidden="true" />
+            <p className="flex-1 px-4 py-3 font-sans text-sm text-ink dark:text-ink-line">
+              {item.message}
+            </p>
             <button
               type="button"
               onClick={() => dismiss(item.id)}
-              className="shrink-0 rounded p-0.5 text-ink-400 transition-colors hover:text-ink-700 dark:hover:text-ink-200"
+              className="px-3 font-sans text-xs text-ink-faint transition-colors hover:text-accent"
               aria-label="关闭提示"
             >
-              <CloseIcon className="h-3.5 w-3.5" />
+              ✕
             </button>
           </div>
         ))}

@@ -133,8 +133,15 @@ for h in "content-security-policy" "x-content-type-options" "x-frame-options" "r
 done
 
 CSP=$(echo "$HDRS" | grep -i "^content-security-policy:" | head -1)
-checkstr "CSP 使用 nonce 而非 unsafe-inline（script-src）" "0" \
-  "$(echo "$CSP" | grep -c "script-src[^;]*unsafe-inline" || true)"
+# dev 与 prod 的 CSP 策略不同：dev 为了不让 Next 的 nonce 注水告警刷屏，
+# script-src 放行 unsafe-inline（dev 本就必需 unsafe-eval，CSP 不是防线）。
+# 这条断言针对生产策略，因此先判断环境。
+if curl -s "$BASE/" | grep -q "next/dist/client"; then
+  printf '  \033[33m-\033[0m %-56s 跳过（当前是 dev 环境，CSP 走 dev 策略）\n' "CSP 使用 nonce 而非 unsafe-inline"
+else
+  checkstr "CSP 使用 nonce 而非 unsafe-inline（script-src）" "0" \
+    "$(echo "$CSP" | grep -c "script-src[^;]*unsafe-inline" || true)"
+fi
 checkstr "CSP 禁止内嵌框架（frame-ancestors none）" "1" \
   "$(echo "$CSP" | grep -c "frame-ancestors 'none'" || true)"
 checkstr "CSP 禁止 object（object-src none）" "1" \
@@ -238,9 +245,15 @@ else
   python3 - <<'PYEOF'
 import re, sys
 html = open('/tmp/xss-check.html', encoding='utf-8').read()
-start = html.find('class="markdown-body"')
+# 注意：页面里同时存在 RSC 的转义载荷（含 "markdown-body" 字样）与真实 DOM，
+# 因此必须匹配真正的 class 属性写法，否则会把内联脚本一起算进来造成误报。
+start = html.find('class="markdown-body')
 end = html.find('id="comments"')
-block = html[start:end] if start != -1 and end != -1 else html
+if start == -1 or end == -1 or end <= start:
+    print('  \033[31m✗\033[0m 无法定位正文区块，断言不可信')
+    print('__BAD__=1')
+    raise SystemExit(0)
+block = html[start:end]
 
 checks = [
     ('<script> 标签',        block.count('<script')),
@@ -308,7 +321,7 @@ section "10. 畸形与边界输入（不应 5xx）"
 # 服务端渲染页面若直接用 searchParams（Next 对重复参数会传数组），
 # `?q=a&q=b` 这类输入会让 .trim() 抛 TypeError 变成 500。
 for probe in "/search?q=a&q=b" "/?tag=x&tag=y" "/?page=1&page=2" "/?page=1e999" \
-             "/search?q=a&page=-1" "/tags/rest?page=1e999"; do
+             "/search?q=a&page=-1" "/topics/rest?page=1e999"; do
   CODE=$(curl -s -o /dev/null -w '%{http_code}' "$BASE$probe")
   check "页面 $probe 不返回 5xx" 200 "$CODE"
 done

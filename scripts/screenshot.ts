@@ -57,8 +57,8 @@ const POST_PATH_PLACEHOLDER = '__POST__'
 const SHOTS: Shot[] = [
   { name: '01-home-light', path: '/', fullPage: true },
   { name: '02-post-detail', path: POST_PATH_PLACEHOLDER, fullPage: true },
-  { name: '03-tags', path: '/tags' },
-  { name: '04-archive', path: '/archive' },
+  { name: '03-topics', path: '/topics' },
+  { name: '04-timeline', path: '/timeline' },
   { name: '05-search', path: '/search?q=Prisma' },
   { name: '06-about', path: '/about', fullPage: true },
   { name: '07-login', path: '/login' },
@@ -70,7 +70,7 @@ const SHOTS: Shot[] = [
   { name: '13-settings', path: '/settings', auth: true },
   { name: '14-home-dark', path: '/', dark: true },
   { name: '15-post-dark', path: POST_PATH_PLACEHOLDER, dark: true },
-  { name: '16-tags-dark', path: '/tags', dark: true },
+  { name: '16-topics-dark', path: '/topics', dark: true },
 ]
 
 async function main(): Promise<void> {

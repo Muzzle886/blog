@@ -1,13 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { CommentItem, CursorMeta, PublicUser } from '@/lib/types'
 import { api } from '@/lib/api-client'
 import { formatRelative } from '@/lib/format'
-import { CommentIcon, TrashIcon } from './icons'
-import { Button, LinkButton, Spinner, Textarea } from './ui'
+import { Button, LinkButton, SectionLabel, Spinner, Textarea } from './ui'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { useToast } from './ui/toast'
 
@@ -20,6 +18,12 @@ interface CommentSectionProps {
   postAuthorId: number
 }
 
+/**
+ * 评论区。
+ * 视觉上不再用「卡片 + 回复框」的堆叠，而是：
+ * 评论之间用细分隔线，作者名与时间压成一行小字，
+ * 操作项（回复/删除）默认隐藏，hover 才出现。
+ */
 export function CommentSection({
   slug,
   viewer,
@@ -28,7 +32,6 @@ export function CommentSection({
   limit,
   postAuthorId,
 }: CommentSectionProps) {
-  const router = useRouter()
   const toast = useToast()
 
   const [comments, setComments] = useState(initialComments)
@@ -42,18 +45,13 @@ export function CommentSection({
   const [pendingDelete, setPendingDelete] = useState<CommentItem | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  const totalCount = meta.total
-
   async function submitRoot(event: React.FormEvent) {
     event.preventDefault()
     const text = content.trim()
     if (!text) return
     setSubmitting(true)
     try {
-      const comment = await api.post<CommentItem>(`/api/posts/${slug}/comments`, {
-        content: text,
-      })
-      // 顶层评论按时间倒序，新评论插到最前
+      const comment = await api.post<CommentItem>(`/api/posts/${slug}/comments`, { content: text })
       setComments((prev) => [comment, ...prev])
       setMeta((prev) => ({ ...prev, total: prev.total + 1 }))
       setContent('')
@@ -76,12 +74,9 @@ export function CommentSection({
       })
       setComments((prev) =>
         prev.map((item) =>
-          item.id === parentId
+          item.id === parentId || item.replies.some((r) => r.id === parentId)
             ? { ...item, replies: [...item.replies, reply] }
-            : // 回复「回复」时后端会把 parentId 提升到顶层，这里同步到对应顶层评论
-              item.replies.some((r) => r.id === parentId)
-              ? { ...item, replies: [...item.replies, reply] }
-              : item,
+            : item,
         ),
       )
       setMeta((prev) => ({ ...prev, total: prev.total + 1 }))
@@ -117,7 +112,6 @@ export function CommentSection({
     setDeleting(true)
     try {
       await api.del(`/api/comments/${pendingDelete.id}`)
-      // 删除顶层评论会连带隐藏其回复
       setComments((prev) =>
         prev
           .filter((item) => item.id !== pendingDelete.id)
@@ -138,23 +132,16 @@ export function CommentSection({
 
   const canModerate = (comment: CommentItem) =>
     viewer !== null &&
-    (viewer.id === comment.author.id ||
-      viewer.id === postAuthorId ||
-      viewer.role === 'ADMIN')
+    (viewer.id === comment.author.id || viewer.id === postAuthorId || viewer.role === 'ADMIN')
 
   return (
-    <section id="comments" className="mt-16 border-t border-ink-200 pt-10 dark:border-ink-800">
-      <h2 className="flex items-center gap-2 text-base font-semibold text-ink-900 dark:text-ink-50">
-        <CommentIcon className="h-4 w-4 text-ink-400" />
-        评论
-        {totalCount > 0 && (
-          <span className="text-sm font-normal text-ink-400 dark:text-ink-500">
-            {totalCount}
-          </span>
-        )}
-      </h2>
+    <section id="comments" className="mt-16">
+      <div className="flex items-baseline justify-between">
+        <SectionLabel>评论</SectionLabel>
+        {meta.total > 0 && <span className="meta">{meta.total} 条</span>}
+      </div>
 
-      <div className="mt-5">
+      <div className="mt-6">
         {viewer ? (
           <form onSubmit={submitRoot}>
             <Textarea
@@ -162,26 +149,28 @@ export function CommentSection({
               onChange={(event) => setContent(event.target.value)}
               rows={3}
               maxLength={1000}
-              placeholder={`以 ${viewer.nickname} 的身份发表评论…`}
+              placeholder="写下你的看法…"
               disabled={submitting}
             />
-            <div className="mt-2 flex items-center justify-between">
-              <span className="hint">{content.length} / 1000</span>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="meta">{content.length} / 1000</span>
               <Button
                 type="submit"
                 size="sm"
                 variant="primary"
                 disabled={submitting || content.trim().length === 0}
               >
-                {submitting && <Spinner className="h-3.5 w-3.5" />}
-                发表评论
+                {submitting && <Spinner />}
+                发表
               </Button>
             </div>
           </form>
         ) : (
-          <div className="flex items-center justify-between rounded-lg border border-ink-200 px-4 py-3 dark:border-ink-800">
-            <p className="text-sm text-ink-500 dark:text-ink-400">登录后即可参与讨论</p>
-            <div className="flex gap-1.5">
+          <div className="border-t border-ink-line py-6 dark:border-night-line">
+            <p className="font-sans text-sm text-ink-soft dark:text-ink-muted">
+              登录后可以参与讨论。
+            </p>
+            <div className="mt-4 flex gap-3">
               <LinkButton
                 href={`/login?redirect=${encodeURIComponent(`/posts/${slug}`)}`}
                 size="sm"
@@ -197,83 +186,79 @@ export function CommentSection({
         )}
       </div>
 
-      <div className="mt-8">
-        {comments.length === 0 ? (
-          <p className="py-8 text-center text-sm text-ink-400 dark:text-ink-500">
-            还没有评论，来说点什么吧。
-          </p>
-        ) : (
-          <ul className="space-y-6">
-            {comments.map((comment) => (
-              <li key={comment.id}>
-                <CommentBody
-                  comment={comment}
-                  viewer={viewer}
-                  canModerate={canModerate(comment)}
-                  onReply={() => {
-                    setReplyTo(replyTo === comment.id ? null : comment.id)
-                    setReplyContent('')
-                  }}
-                  onDelete={() => setPendingDelete(comment)}
-                />
+      {comments.length === 0 ? (
+        <p className="mt-10 font-sans text-sm text-ink-faint dark:text-ink-muted">
+          还没有评论。
+        </p>
+      ) : (
+        <ul className="mt-10">
+          {comments.map((comment) => (
+            <li key={comment.id} className="border-t border-ink-line py-6 dark:border-night-line">
+              <CommentBody
+                comment={comment}
+                canModerate={canModerate(comment)}
+                onReply={() => {
+                  setReplyTo(replyTo === comment.id ? null : comment.id)
+                  setReplyContent('')
+                }}
+                onDelete={() => setPendingDelete(comment)}
+              />
 
-                {comment.replies.length > 0 && (
-                  <ul className="mt-4 space-y-4 border-l border-ink-200 pl-4 dark:border-ink-800">
-                    {comment.replies.map((reply) => (
-                      <li key={reply.id}>
-                        <CommentBody
-                          comment={reply}
-                          viewer={viewer}
-                          canModerate={canModerate(reply)}
-                          onReply={() => {
-                            setReplyTo(replyTo === reply.id ? null : reply.id)
-                            setReplyContent('')
-                          }}
-                          onDelete={() => setPendingDelete(reply)}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                )}
+              {comment.replies.length > 0 && (
+                <ul className="mt-5 space-y-5 border-l border-ink-line pl-5 dark:border-night-line">
+                  {comment.replies.map((reply) => (
+                    <li key={reply.id}>
+                      <CommentBody
+                        comment={reply}
+                        canModerate={canModerate(reply)}
+                        onReply={() => {
+                          setReplyTo(replyTo === reply.id ? null : reply.id)
+                          setReplyContent('')
+                        }}
+                        onDelete={() => setPendingDelete(reply)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
 
-                {replyTo === comment.id && (
-                  <div className="mt-3 pl-4">
-                    <Textarea
-                      autoFocus
-                      value={replyContent}
-                      onChange={(event) => setReplyContent(event.target.value)}
-                      rows={2}
-                      maxLength={1000}
-                      placeholder={`回复 ${comment.author.nickname}…`}
-                      disabled={replySubmitting}
-                    />
-                    <div className="mt-2 flex justify-end gap-1.5">
-                      <Button size="sm" variant="ghost" onClick={() => setReplyTo(null)}>
-                        取消
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        disabled={replySubmitting || replyContent.trim().length === 0}
-                        onClick={() => submitReply(comment.id)}
-                      >
-                        {replySubmitting && <Spinner className="h-3.5 w-3.5" />}
-                        回复
-                      </Button>
-                    </div>
+              {replyTo === comment.id && (
+                <div className="mt-4 pl-5">
+                  <Textarea
+                    autoFocus
+                    value={replyContent}
+                    onChange={(event) => setReplyContent(event.target.value)}
+                    rows={2}
+                    maxLength={1000}
+                    placeholder={`回复 ${comment.author.nickname}…`}
+                    disabled={replySubmitting}
+                  />
+                  <div className="mt-3 flex justify-end gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => setReplyTo(null)}>
+                      取消
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      disabled={replySubmitting || replyContent.trim().length === 0}
+                      onClick={() => submitReply(comment.id)}
+                    >
+                      {replySubmitting && <Spinner />}
+                      回复
+                    </Button>
                   </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
 
       {meta.hasMore && (
-        <div className="mt-8 text-center">
-          <Button size="sm" onClick={loadMore} disabled={loadingMore}>
-            {loadingMore && <Spinner className="h-3.5 w-3.5" />}
-            加载更多评论
+        <div className="mt-8 border-t border-ink-line pt-6 dark:border-night-line">
+          <Button size="sm" variant="ghost" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore && <Spinner />}
+            加载更早的评论
           </Button>
         </div>
       )}
@@ -298,57 +283,48 @@ export function CommentSection({
 
 function CommentBody({
   comment,
-  viewer,
   canModerate,
   onReply,
   onDelete,
 }: {
   comment: CommentItem
-  viewer: PublicUser | null
   canModerate: boolean
   onReply: () => void
   onDelete: () => void
 }) {
   return (
     <div className="group">
-      <div className="flex items-center gap-2 text-xs text-ink-400 dark:text-ink-500">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-ink-100 text-2xs font-semibold text-ink-600 dark:bg-ink-800 dark:text-ink-300">
-          {comment.author.nickname.slice(0, 1).toUpperCase()}
-        </span>
+      <div className="flex flex-wrap items-baseline gap-x-3">
         <Link
           href={`/users/${comment.author.username}`}
-          className="font-medium text-ink-700 transition-colors hover:text-accent dark:text-ink-300"
+          className="font-sans text-sm font-medium text-ink-strong transition-colors hover:text-accent dark:text-white"
         >
           {comment.author.nickname}
         </Link>
-        <time dateTime={comment.createdAt}>{formatRelative(comment.createdAt)}</time>
-      </div>
+        <time className="meta" dateTime={comment.createdAt}>
+          {formatRelative(comment.createdAt)}
+        </time>
 
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink-700 dark:text-ink-300">
-        {comment.content}
-      </p>
-
-      <div className="mt-1.5 flex items-center gap-3 text-xs opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-        {viewer && (
-          <button
-            type="button"
-            onClick={onReply}
-            className="text-ink-400 transition-colors hover:text-accent dark:text-ink-500"
-          >
+        {/* 操作项默认不显示，hover 或键盘聚焦时出现 */}
+        <span className="ml-auto flex gap-3 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+          <button type="button" onClick={onReply} className="tag">
             回复
           </button>
-        )}
-        {canModerate && (
-          <button
-            type="button"
-            onClick={onDelete}
-            className="inline-flex items-center gap-1 text-ink-400 transition-colors hover:text-red-600 dark:text-ink-500 dark:hover:text-red-400"
-          >
-            <TrashIcon className="h-3 w-3" />
-            删除
-          </button>
-        )}
+          {canModerate && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="font-sans text-xs text-ink-faint transition-colors hover:text-red-700 dark:hover:text-red-400"
+            >
+              删除
+            </button>
+          )}
+        </span>
       </div>
+
+      <p className="mt-2.5 whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink-soft dark:text-ink-muted">
+        {comment.content}
+      </p>
     </div>
   )
 }

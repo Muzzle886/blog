@@ -13,13 +13,29 @@
 
   html {
     -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
   }
 
+  /*
+   * 底色用暖白而非纯白，文字用暖墨而非纯黑。
+   * 纯白/纯黑在长时间阅读时对比过强，是"像文档"而不是"像书"的主因。
+   */
   body {
-    @apply bg-white text-ink-900 antialiased;
-    @apply dark:bg-ink-950 dark:text-ink-100;
-    font-size: 15px;
-    line-height: 1.65;
+    @apply bg-paper text-ink antialiased;
+    @apply dark:bg-night dark:text-ink-line;
+    font-size: 1.0625rem;
+    line-height: 1.75;
+    font-feature-settings: 'kern' 1, 'liga' 1;
+  }
+
+  /* 标题一律衬线体，形成阅读型排版的骨架 */
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-serif text-ink-strong dark:text-white;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
   }
 
   ::selection {
@@ -27,75 +43,110 @@
   }
 
   :focus-visible {
-    @apply outline-none ring-2 ring-accent/40 ring-offset-2 ring-offset-white dark:ring-offset-ink-950;
+    @apply outline-none ring-2 ring-accent/50 ring-offset-2 ring-offset-paper dark:ring-offset-night;
   }
 
-  /* 细滚动条，贴合极简风格 */
   * {
     scrollbar-width: thin;
-    scrollbar-color: theme('colors.ink.300') transparent;
+    scrollbar-color: theme('colors.ink.line') transparent;
   }
 
   .dark * {
-    scrollbar-color: theme('colors.ink.700') transparent;
+    scrollbar-color: theme('colors.night.line-strong') transparent;
   }
 
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 9px;
+    height: 9px;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply rounded-full border-4 border-solid border-transparent bg-ink-300 bg-clip-content;
+    @apply border-4 border-solid border-transparent bg-ink-line bg-clip-content;
   }
 
   .dark ::-webkit-scrollbar-thumb {
-    @apply bg-ink-700;
+    @apply bg-night-line-strong;
   }
 }
 
 @layer components {
-  /* 页面容器 */
-  .container-page {
-    @apply mx-auto w-full max-w-5xl px-5 sm:px-6;
+  /* ============ 布局 ============ */
+  /* 页面外框：非对称网格的容器，比"居中单列"更有编辑感 */
+  .shell {
+    @apply mx-auto w-full max-w-page px-6 sm:px-8 lg:px-12;
   }
 
-  .container-narrow {
-    @apply mx-auto w-full max-w-3xl px-5 sm:px-6;
+  /* 正文阅读列：限制每行字数，中文约 38–42 字 */
+  .reading {
+    @apply w-full max-w-reading;
   }
 
-  /* 扁平卡片：靠边框而非阴影建立层级 */
-  .card {
-    @apply rounded-lg border border-ink-200 bg-white dark:border-ink-800 dark:bg-ink-900;
+  /* ============ 排版 ============ */
+  /* 小标签：全大写、宽字距、极小字号 —— 编辑排版的"栏目名" */
+  .eyebrow {
+    @apply font-sans text-2xs font-medium uppercase text-ink-faint dark:text-ink-muted;
   }
 
-  /* 列表项 hover 反馈 */
-  .list-item {
-    @apply -mx-3 rounded-lg px-3 transition-colors duration-150 hover:bg-ink-50 dark:hover:bg-ink-800/60;
+  /* 元信息行：日期、作者、阅读时长等 */
+  .meta {
+    @apply font-sans text-xs text-ink-muted dark:text-ink-faint;
   }
 
-  .label {
-    @apply mb-1.5 block text-sm font-medium text-ink-700 dark:text-ink-300;
+  /* 栏目分隔：一条极细的线，代替卡片边框来做分组 */
+  .rule {
+    @apply h-px w-full bg-ink-line dark:bg-night-line;
   }
 
-  .hint {
-    @apply text-xs text-ink-400 dark:text-ink-500;
+  /* 列表项：hover 只改文字色，不加背景块 */
+  .entry {
+    @apply group relative block py-7 transition-colors duration-200;
   }
 
-  .nav-link {
-    @apply rounded-md px-2.5 py-1.5 text-sm text-ink-600 transition-colors duration-150 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-ink-100;
+  /* ============ 交互 ============ */
+  /* 文字链接：hover 时加深下划线而非变色块 */
+  .link {
+    @apply text-accent underline decoration-accent/30 decoration-1 underline-offset-[3px] transition-colors hover:decoration-accent;
   }
 
-  .nav-link-active {
-    @apply bg-ink-100 font-medium text-ink-900 dark:bg-ink-800 dark:text-ink-100;
+  /* 导航链接：默认弱化，hover/当前项只改文字色，不用背景块 */
+  .nav-item {
+    @apply font-sans text-sm text-ink-soft transition-colors duration-150 hover:text-accent dark:text-ink-muted dark:hover:text-accent;
   }
 
-  .divider {
-    @apply h-px w-full bg-ink-200 dark:bg-ink-800;
+  .nav-item-active {
+    @apply font-medium text-ink-strong dark:text-white;
   }
 
+  /* 标签：像"分类词"而不是"按钮"，无背景、无边框 */
+  .tag {
+    @apply font-sans text-xs text-ink-muted transition-colors duration-150 hover:text-accent dark:text-ink-faint;
+  }
+
+  /* 输入控件：只有一条底线，像填写表格而不是网页表单 */
+  .field {
+    @apply w-full border-0 border-b border-ink-line bg-transparent px-0 py-2 font-sans text-base text-ink transition-colors placeholder:text-ink-faint hover:border-ink-line-strong focus:border-accent focus:outline-none focus:ring-0 dark:border-night-line dark:text-white dark:placeholder:text-ink-faint dark:hover:border-night-line-strong dark:focus:border-accent;
+  }
+
+  /* 按钮：主按钮是唯一的"重"元素；次按钮是纯文字 */
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-sm px-4 py-2 font-sans text-sm font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45;
+  }
+
+  .btn-primary {
+    @apply bg-ink-strong text-paper hover:bg-accent dark:bg-white dark:text-night dark:hover:bg-accent;
+  }
+
+  .btn-ghost {
+    @apply text-ink-soft hover:text-accent dark:text-ink-muted dark:hover:text-accent;
+  }
+
+  .btn-outline {
+    @apply border border-ink-line-strong text-ink-soft hover:border-accent hover:text-accent dark:border-night-line-strong dark:text-ink-muted dark:hover:border-accent dark:hover:text-accent;
+  }
+
+  /* 骨架屏：用纸色差而非灰块 */
   .skeleton {
-    @apply animate-pulse rounded bg-ink-100 dark:bg-ink-800;
+    @apply animate-pulse bg-paper-sunken dark:bg-night-raised;
   }
 }
 
@@ -104,7 +155,12 @@
     text-wrap: balance;
   }
 
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
+  /* 首字下沉：杂志排版的标志性手法，用于文章开头 */
+  .dropcap::first-letter {
+    @apply font-serif text-4xl font-medium text-ink-strong dark:text-white;
+    float: left;
+    padding-right: 0.5rem;
+    padding-top: 0.3rem;
+    line-height: 0.9;
   }
 }

@@ -1,169 +1,155 @@
-import Link from 'next/link'
 import { getCurrentUser } from '@/lib/auth'
+import Link from 'next/link'
 import { postService } from '@/server/post-service'
 import { tagService } from '@/server/tag-service'
-import { PostCard } from '@/components/post-card'
-import { Pagination } from '@/components/pagination'
-import { EmptyState, LinkButton } from '@/components/ui'
-import { TagIcon } from '@/components/icons'
-import { optionalStr, page as pageParam, type PageSearchParams } from '@/lib/search-params'
+import { PostEntry } from '@/components/post-entry'
+import { formatDate } from '@/lib/format'
+import { EmptyState, LinkButton, SectionLabel } from '@/components/ui'
+import { page as pageParam, type PageSearchParams } from '@/lib/search-params'
 
 export const dynamic = 'force-dynamic'
 
-const PAGE_SIZE = 8
+const RECENT_SIZE = 8
 
 interface HomeProps {
   searchParams: PageSearchParams
 }
 
+/**
+ * 首页 = 特写 + 近期文章。
+ *
+ * 与旧版最大的结构差异：不再有右侧边栏和卡片列表。
+ * 首屏用一篇「特写」占据视觉重心（大号衬线标题 + 摘要 + 首字下沉），
+ * 下面接一条紧凑的近期列表，标签只作为一行文字出现，不占版面。
+ */
 export default async function HomePage({ searchParams }: HomeProps) {
-  const page = pageParam(searchParams.page)
-  const tag = optionalStr(searchParams.tag)
+  const currentPage = pageParam(searchParams.page)
 
-  const [viewer, { items, meta }, tags] = await Promise.all([
-    getCurrentUser(),
+  const [featured, recent, topics] = await Promise.all([
+    postService.list({ page: 1, pageSize: 1, status: 'PUBLISHED', sort: 'latest' }, null),
     postService.list(
-      { page, pageSize: PAGE_SIZE, status: 'PUBLISHED', sort: 'latest', tag },
-      // 首页只展示已发布文章，登录态不影响过滤
+      { page: currentPage, pageSize: RECENT_SIZE, status: 'PUBLISHED', sort: 'latest' },
       null,
     ),
     tagService.list(),
   ])
 
-  const buildHref = (nextPage: number) => {
-    const params = new URLSearchParams()
-    if (tag) params.set('tag', tag)
-    if (nextPage > 1) params.set('page', String(nextPage))
-    const query = params.toString()
-    return query ? `/?${query}` : '/'
-  }
+  const hero = currentPage === 1 ? featured.items[0] : undefined
+  // 首页第一页时，列表跳过已作为特写展示的那篇，避免重复
+  const entries = hero ? recent.items.slice(1) : recent.items
+  const viewer = await getCurrentUser()
 
   return (
-    <div className="container-page py-10">
-      <section className="mb-10 max-w-prose">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink-900 dark:text-ink-50">
-          最新文章
-        </h1>
-        <p className="mt-2 text-sm text-ink-500 dark:text-ink-400">
-          关于工程实践、架构取舍与技术写作的记录。
-          {meta.total > 0 && <> 共 {meta.total} 篇。</>}
-        </p>
-      </section>
-
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_13rem]">
-        <div>
-          {tag && (
-            <div className="mb-4 flex items-center gap-2 text-sm text-ink-500 dark:text-ink-400">
-              <TagIcon className="h-4 w-4" />
-              正在筛选标签
-              <span className="font-medium text-ink-800 dark:text-ink-200">
-                #{tags.find((item) => item.slug === tag)?.name ?? tag}
-              </span>
-              <Link href="/" className="ml-1 text-accent hover:underline">
-                清除
-              </Link>
+    <div className="shell">
+      {hero && (
+        <section className="border-b border-ink-line py-16 dark:border-night-line lg:py-24">
+          <div className="grid gap-10 lg:grid-cols-12">
+            <div className="lg:col-span-3">
+              <SectionLabel>本期特写</SectionLabel>
+              <p className="meta mt-4">{formatDate(hero.publishedAt ?? hero.createdAt)}</p>
             </div>
-          )}
 
-          {items.length === 0 ? (
+            <div className="min-w-0 lg:col-span-8 lg:col-start-5">
+              <h1 className="font-serif text-3xl leading-tight sm:text-4xl lg:text-5xl">
+                <Link
+                  href={`/posts/${hero.slug}`}
+                  className="text-ink-strong transition-colors hover:text-accent dark:text-white"
+                >
+                  {hero.title}
+                </Link>
+              </h1>
+
+              {hero.summary && (
+                <p className="dropcap mt-8 max-w-2xl font-sans text-base leading-relaxed text-ink-soft dark:text-ink-muted">
+                  {hero.summary}
+                </p>
+              )}
+
+              <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2">
+                <Link
+                  href={`/posts/${hero.slug}`}
+                  className="link font-sans text-sm"
+                >
+                  阅读全文
+                </Link>
+                <span className="meta">{hero.author.nickname}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="grid gap-10 py-16 lg:grid-cols-12">
+        <div className="lg:col-span-3">
+          <SectionLabel>近期</SectionLabel>
+          {recent.meta.total > 0 && (
+            <p className="meta mt-4">共 {recent.meta.total} 篇</p>
+          )}
+        </div>
+
+        <div className="min-w-0 lg:col-span-8 lg:col-start-5">
+          {entries.length === 0 ? (
             <EmptyState
-              title={tag ? '该标签下暂无文章' : '还没有发布任何文章'}
-              description={
-                tag ? '试试其他标签，或浏览全部文章。' : '登录后即可写下第一篇。'
-              }
+              title="还没有文章"
+              description="登录后即可写下第一篇。"
               action={
-                tag ? (
-                  <LinkButton href="/" size="sm">
-                    查看全部
-                  </LinkButton>
-                ) : (
-                  <LinkButton href="/write" size="sm" variant="primary">
-                    开始写作
-                  </LinkButton>
-                )
+                <LinkButton href="/write" variant="primary" size="sm">
+                  开始写作
+                </LinkButton>
               }
             />
           ) : (
             <>
               <div>
-                {items.map((post) => (
-                  <PostCard key={post.id} post={post} />
+                {entries.map((post, index) => (
+                  <PostEntry key={post.id} post={post} index={index} />
                 ))}
               </div>
-              <Pagination
-                page={meta.page}
-                totalPages={meta.totalPages}
-                buildHref={buildHref}
-                className="mt-10"
-              />
+              <div className="mt-8">
+                <Link href="/writing" className="link font-sans text-sm">
+                  查看全部文章 →
+                </Link>
+              </div>
             </>
           )}
         </div>
+      </section>
 
-        <aside className="hidden lg:block">
-          <div className="sticky top-20 space-y-6">
-            <SidebarBlock title="常用标签">
-              {tags.length === 0 ? (
-                <p className="text-xs hint">暂无标签</p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {tags.slice(0, 12).map((item) => (
-                    <Link
-                      key={item.id}
-                      href={`/tags/${encodeURIComponent(item.slug)}`}
-                      className="rounded border border-ink-200 px-2 py-1 text-2xs text-ink-600 transition-colors hover:border-accent/40 hover:text-accent dark:border-ink-700 dark:text-ink-400"
-                    >
-                      {item.name}
-                      <span className="ml-1 text-ink-400 dark:text-ink-600">
-                        {item.postCount}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </SidebarBlock>
-
-            {viewer ? (
-              <SidebarBlock title="快捷入口">
-                <div className="flex flex-col gap-1.5">
-                  <LinkButton href="/write" size="sm" variant="primary" className="w-full">
-                    写新文章
-                  </LinkButton>
-                  <LinkButton href="/admin/posts" size="sm" className="w-full">
-                    管理文章
-                  </LinkButton>
-                </div>
-              </SidebarBlock>
-            ) : (
-              <SidebarBlock title="关于本站">
-                <p className="text-xs leading-relaxed text-ink-500 dark:text-ink-400">
-                  使用 Next.js App Router 与 Prisma 构建，
-                  接口遵循 RESTful 规范。登录后可以发表评论与文章。
-                </p>
-                <div className="mt-3 flex gap-1.5">
-                  <LinkButton href="/login" size="sm" variant="primary">
-                    登录
-                  </LinkButton>
-                  <LinkButton href="/register" size="sm">
-                    注册
-                  </LinkButton>
-                </div>
-              </SidebarBlock>
-            )}
+      {topics.length > 0 && (
+        <section className="border-t border-ink-line py-12 dark:border-night-line">
+          <div className="grid gap-6 lg:grid-cols-12">
+            <div className="lg:col-span-3">
+              <SectionLabel>主题</SectionLabel>
+            </div>
+            <div className="flex flex-wrap gap-x-6 gap-y-3 lg:col-span-8 lg:col-start-5">
+              {topics.slice(0, 14).map((topic) => (
+                <Link key={topic.id} href={`/topics/${encodeURIComponent(topic.slug)}`} className="tag">
+                  {topic.name}
+                  <span className="ml-1.5 text-ink-faint">{topic.postCount}</span>
+                </Link>
+              ))}
+            </div>
           </div>
-        </aside>
-      </div>
-    </div>
-  )
-}
+        </section>
+      )}
 
-function SidebarBlock({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-400 dark:text-ink-500">
-        {title}
-      </h2>
-      {children}
+      {!viewer && (
+        <section className="border-t border-ink-line py-12 dark:border-night-line">
+          <div className="flex flex-wrap items-baseline justify-between gap-4">
+            <p className="font-sans text-sm text-ink-soft dark:text-ink-muted">
+              登录后可以发表评论与文章。
+            </p>
+            <div className="flex gap-3">
+              <LinkButton href="/login" variant="primary" size="sm">
+                登录
+              </LinkButton>
+              <LinkButton href="/register" size="sm">
+                注册
+              </LinkButton>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   )
 }

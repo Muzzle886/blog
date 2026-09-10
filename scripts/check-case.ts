@@ -108,6 +108,10 @@ function stripComments(source: string): string {
 }
 
 for (const file of files) {
+  // git 索引可能还列着已删除但尚未提交的文件（例如刚删掉一个路由），
+  // 直接 readFileSync 会 ENOENT 崩掉整个检查
+  if (!existsSync(file)) continue
+
   // 用 readFileSync 而不是 execSync(`cat ...`)：
   // 后者把「git 里的文件名」拼进 shell 命令，而 JSON.stringify 只转义
   // 双引号与反斜杠，不转义反引号与 $()。一个带反引号的文件名就能在

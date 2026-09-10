@@ -6,21 +6,21 @@ import { UserMenu } from '@/components/user-menu'
 
 const siteName = process.env.NEXT_PUBLIC_SITE_NAME || "Muzzle's Blog"
 
-/** 写作区布局：只保留返回首页、主题切换与用户菜单，把屏幕让给编辑区 */
+/** 写作区外壳：极简报头，把屏幕让给编辑区 */
 export default async function WriteLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser()
   if (!user) redirect('/login?redirect=%2Fwrite')
 
   return (
     <div className="min-h-screen">
-      <div className="container-page flex h-12 items-center gap-3 border-b border-ink-100 dark:border-ink-900">
+      <div className="shell flex h-14 items-center gap-4 border-b border-ink-line dark:border-night-line">
         <Link
           href="/"
-          className="text-sm font-semibold tracking-tight text-ink-900 dark:text-ink-50"
+          className="font-serif text-base tracking-tight text-ink-strong transition-colors hover:text-accent dark:text-white"
         >
           {siteName}
         </Link>
-        <span className="text-xs text-ink-400 dark:text-ink-600">写作区</span>
+        <span className="eyebrow">写作</span>
         <div className="ml-auto flex items-center gap-1">
           <ThemeToggle />
           <UserMenu user={user} />

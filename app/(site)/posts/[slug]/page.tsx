@@ -8,8 +8,7 @@ import { formatDate } from '@/lib/format'
 import { postService } from '@/server/post-service'
 import { commentService } from '@/server/comment-service'
 import { CommentSection } from '@/components/comment-section'
-import { ArrowLeftIcon, ClockIcon, EyeIcon } from '@/components/icons'
-import { Badge } from '@/components/ui'
+import { SectionLabel } from '@/components/ui'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,11 +42,16 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
   }
 }
 
+/**
+ * 文章页。
+ *
+ * 结构上最大的变化：不再是「居中单列 + 标题堆叠」，
+ * 而是**非对称两栏** —— 左栏是窄的固定 meta（日期/作者/时长/主题），
+ * 右栏是主阅读列。这是杂志排版的常见处理，让正文行宽始终保持舒适，
+ * 同时把元信息从标题上方挪走，标题可以更大更干净。
+ */
 export default async function PostPage({ params }: PostPageProps) {
-  const [post, viewer] = await Promise.all([
-    loadPost(params.slug),
-    getCurrentUser(),
-  ])
+  const [post, viewer] = await Promise.all([loadPost(params.slug), getCurrentUser()])
 
   const { items: comments, meta: commentMeta } = await commentService.listByPostSlug(
     params.slug,
@@ -56,87 +60,109 @@ export default async function PostPage({ params }: PostPageProps) {
   )
 
   const isAuthor = viewer?.id === post.author.id
+  const canEdit = isAuthor || viewer?.role === 'ADMIN'
   const readingMinutes = estimateReadingMinutes(post.content)
 
   return (
-    <div className="container-narrow py-10">
-      <Link
-        href="/"
-        className="mb-8 inline-flex items-center gap-1.5 text-sm text-ink-500 transition-colors hover:text-ink-900 dark:text-ink-400 dark:hover:text-ink-100"
-      >
-        <ArrowLeftIcon className="h-4 w-4" />
-        返回首页
-      </Link>
+    <article className="shell">
+      {/* ===== 文章头：左 meta / 右标题 ===== */}
+      <header className="grid gap-8 border-b border-ink-line py-12 dark:border-night-line lg:grid-cols-12 lg:py-16">
+        <div className="lg:col-span-3">
+          <SectionLabel>{post.status === 'DRAFT' ? '草稿' : '文章'}</SectionLabel>
 
-      <article>
-        <header className="mb-8 border-b border-ink-200 pb-6 dark:border-ink-800">
-          <div className="flex flex-wrap items-center gap-2">
-            {post.status === 'DRAFT' && (
-              <Badge className="border-amber-300 text-amber-600 dark:border-amber-800 dark:text-amber-500">
-                草稿
-              </Badge>
-            )}
-            {(isAuthor || viewer?.role === 'ADMIN') && (
-              <Link
-                href={`/write/${post.slug}`}
-                className="text-xs text-accent hover:underline"
-              >
-                编辑
-              </Link>
-            )}
-          </div>
-
-          <h1 className="mt-3 text-balance text-3xl font-semibold leading-tight tracking-tight text-ink-900 dark:text-ink-50">
-            {post.title}
-          </h1>
-
-          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-ink-400 dark:text-ink-500">
-            <Link
-              href={`/users/${post.author.username}`}
-              className="transition-colors hover:text-ink-700 dark:hover:text-ink-300"
-            >
-              {post.author.nickname}
-            </Link>
-            <span className="inline-flex items-center gap-1">
-              <ClockIcon className="h-3.5 w-3.5" />
+          {/* 窄栏的 meta 列表：小字、纵向排布，不抢标题的注意力 */}
+          <dl className="mt-6 space-y-3">
+            <MetaRow label="日期">
               <time dateTime={post.publishedAt ?? post.createdAt}>
                 {formatDate(post.publishedAt ?? post.createdAt)}
               </time>
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <EyeIcon className="h-3.5 w-3.5" />
-              {post.views} 次阅读
-            </span>
-            <span>约 {readingMinutes} 分钟</span>
+            </MetaRow>
+            <MetaRow label="作者">
+              <Link href={`/users/${post.author.username}`} className="transition-colors hover:text-accent">
+                {post.author.nickname}
+              </Link>
+            </MetaRow>
+            <MetaRow label="时长">约 {readingMinutes} 分钟</MetaRow>
+            <MetaRow label="阅读">{post.views}</MetaRow>
+            {post.tags.length > 0 && (
+              <MetaRow label="主题">
+                <span className="flex flex-wrap gap-x-2 gap-y-1">
+                  {post.tags.map((tag) => (
+                    <Link
+                      key={tag.id}
+                      href={`/topics/${encodeURIComponent(tag.slug)}`}
+                      className="tag"
+                    >
+                      {tag.name}
+                    </Link>
+                  ))}
+                </span>
+              </MetaRow>
+            )}
+          </dl>
+
+          {canEdit && (
+            <Link href={`/write/${post.slug}`} className="mt-6 inline-block link font-sans text-xs">
+              编辑此篇
+            </Link>
+          )}
+        </div>
+
+        <div className="min-w-0 lg:col-span-8 lg:col-start-5">
+          <h1 className="text-balance font-serif text-3xl leading-tight sm:text-4xl lg:text-5xl">
+            {post.title}
+          </h1>
+          {post.summary && (
+            <p className="mt-6 max-w-2xl font-sans text-lg leading-relaxed text-ink-soft dark:text-ink-muted">
+              {post.summary}
+            </p>
+          )}
+        </div>
+      </header>
+
+      {/* ===== 正文：右侧阅读列 ===== */}
+      <div className="grid gap-8 py-12 lg:grid-cols-12 lg:py-16">
+        <div className="min-w-0 lg:col-span-8 lg:col-start-5">
+          <div
+            className="markdown-body reading"
+            dangerouslySetInnerHTML={{ __html: post.html }}
+          />
+
+          {/* 文末导航 */}
+          <div className="mt-16 border-t border-ink-line pt-8 dark:border-night-line">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <Link href="/writing" className="nav-item">
+                ← 返回文章列表
+              </Link>
+              <Link
+                href={`/users/${post.author.username}`}
+                className="meta transition-colors hover:text-accent"
+              >
+                {post.author.nickname} 的其它文章
+              </Link>
+            </div>
           </div>
 
-          {post.tags.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-1.5">
-              {post.tags.map((tag) => (
-                <Link
-                  key={tag.id}
-                  href={`/tags/${encodeURIComponent(tag.slug)}`}
-                  className="rounded border border-ink-200 px-2 py-0.5 text-2xs text-ink-500 transition-colors hover:border-accent/40 hover:text-accent dark:border-ink-700 dark:text-ink-400"
-                >
-                  {tag.name}
-                </Link>
-              ))}
-            </div>
-          )}
-        </header>
+          <CommentSection
+            slug={post.slug}
+            viewer={viewer}
+            initialComments={comments}
+            initialMeta={commentMeta}
+            limit={COMMENT_LIMIT}
+            postAuthorId={post.author.id}
+          />
+        </div>
+      </div>
+    </article>
+  )
+}
 
-        {/* html 由 lib/markdown.ts 在服务端经 marked 渲染 + DOMPurify 清洗 */}
-        <div className="markdown-body" dangerouslySetInnerHTML={{ __html: post.html }} />
-      </article>
-
-      <CommentSection
-        slug={post.slug}
-        viewer={viewer}
-        initialComments={comments}
-        initialMeta={commentMeta}
-        limit={COMMENT_LIMIT}
-        postAuthorId={post.author.id}
-      />
+/** 窄栏 meta 的一行：标签在左、值在右，用极小的字 */
+function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="eyebrow">{label}</dt>
+      <dd className="mt-1 font-sans text-sm text-ink-soft dark:text-ink-muted">{children}</dd>
     </div>
   )
 }

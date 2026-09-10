@@ -15,33 +15,32 @@ export default function GlobalError({
   }, [error])
 
   return (
-    <div className="container-narrow flex min-h-screen flex-col items-center justify-center py-20 text-center">
-      <p className="font-mono text-5xl font-semibold text-ink-200 dark:text-ink-800">500</p>
-      <h1 className="mt-5 text-lg font-semibold text-ink-900 dark:text-ink-50">
-        页面出错了
-      </h1>
-      <p className="mt-2 max-w-sm text-sm text-ink-500 dark:text-ink-400">
-        服务端渲染时发生异常。可以重试，或返回首页继续浏览。
-      </p>
-      {error.digest && (
-        <p className="mt-2 font-mono text-xs text-ink-400 dark:text-ink-600">
-          错误编号：{error.digest}
-        </p>
-      )}
-      <div className="mt-6 flex gap-2">
-        <button
-          type="button"
-          onClick={reset}
-          className="inline-flex h-9 items-center rounded-md bg-ink-900 px-4 text-sm font-medium text-white transition-colors hover:bg-ink-800 dark:bg-ink-100 dark:text-ink-900"
-        >
-          重试
-        </button>
-        <a
-          href="/"
-          className="inline-flex h-9 items-center rounded-md border border-ink-200 px-4 text-sm font-medium text-ink-700 transition-colors hover:bg-ink-50 dark:border-ink-700 dark:text-ink-200 dark:hover:bg-ink-800"
-        >
-          回到首页
-        </a>
+    <div className="shell flex min-h-[70vh] items-center py-20">
+      <div className="grid w-full gap-8 lg:grid-cols-12">
+        <div className="lg:col-span-3">
+          <p className="font-mono text-xs text-ink-faint dark:text-ink-muted">500</p>
+        </div>
+        <div className="lg:col-span-8 lg:col-start-5">
+          <h1 className="font-serif text-3xl text-ink-strong dark:text-white sm:text-4xl">
+            页面出错了
+          </h1>
+          <p className="mt-6 max-w-md font-sans text-base leading-relaxed text-ink-soft dark:text-ink-muted">
+            渲染时发生异常。可以重试，或返回首页继续浏览。
+          </p>
+          {error.digest && (
+            <p className="mt-3 font-mono text-xs text-ink-faint dark:text-ink-muted">
+              错误编号 {error.digest}
+            </p>
+          )}
+          <div className="mt-8 flex gap-6">
+            <button type="button" onClick={reset} className="link font-sans text-sm">
+              重试
+            </button>
+            <a href="/" className="nav-item">
+              回到首页
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   )

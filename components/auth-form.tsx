@@ -34,7 +34,6 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // 切换登录/注册时清空校验状态
   useEffect(() => {
     setErrors({})
     setFormError('')
@@ -76,7 +75,6 @@ export function AuthForm({ mode }: { mode: Mode }) {
       router.refresh()
     } catch (error) {
       if (error instanceof ApiError) {
-        // 422 携带字段级明细，直接贴到对应输入框
         if (error.details?.length) {
           const mapped: FieldErrors = {}
           for (const detail of error.details) {
@@ -102,20 +100,15 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const isLogin = mode === 'login'
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4" noValidate>
+    <form onSubmit={onSubmit} className="space-y-8" noValidate>
       {formError && (
-        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-400">
+        <p className="border-l-2 border-red-600 pl-4 font-sans text-sm text-red-700 dark:text-red-400">
           {formError}
         </p>
       )}
 
       {isLogin ? (
-        <Field
-          label="用户名或邮箱"
-          htmlFor="identifier"
-          error={errors.identifier}
-          required
-        >
+        <Field label="用户名或邮箱" htmlFor="identifier" error={errors.identifier} required>
           <Input
             id="identifier"
             name="identifier"
@@ -127,7 +120,13 @@ export function AuthForm({ mode }: { mode: Mode }) {
         </Field>
       ) : (
         <>
-          <Field label="用户名" htmlFor="username" error={errors.username} required hint="3–32 位字母、数字、下划线或连字符">
+          <Field
+            label="用户名"
+            htmlFor="username"
+            error={errors.username}
+            required
+            hint="3–32 位字母、数字、下划线或连字符"
+          >
             <Input
               id="username"
               name="username"
@@ -180,39 +179,36 @@ export function AuthForm({ mode }: { mode: Mode }) {
         />
       </Field>
 
-      <Button
-        type="submit"
-        variant="primary"
-        className="w-full"
-        disabled={submitting}
-      >
-        {submitting && <Spinner className="h-3.5 w-3.5" />}
-        {isLogin ? '登录' : '注册并登录'}
-      </Button>
+      <div className="flex items-center gap-6 pt-2">
+        <Button type="submit" variant="primary" disabled={submitting}>
+          {submitting && <Spinner />}
+          {isLogin ? '登录' : '注册并登录'}
+        </Button>
 
-      <p className="text-center text-xs text-ink-400 dark:text-ink-500">
-        {isLogin ? (
-          <>
-            还没有账号？
-            <Link
-              href={`/register${redirectTo !== '/' ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`}
-              className="ml-1 text-accent hover:underline"
-            >
-              注册
-            </Link>
-          </>
-        ) : (
-          <>
-            已有账号？
-            <Link
-              href={`/login${redirectTo !== '/' ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`}
-              className="ml-1 text-accent hover:underline"
-            >
-              登录
-            </Link>
-          </>
-        )}
-      </p>
+        <p className="font-sans text-xs text-ink-muted dark:text-ink-faint">
+          {isLogin ? (
+            <>
+              还没有账号？
+              <Link
+                href={`/register${redirectTo !== '/' ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`}
+                className="ml-1 link"
+              >
+                注册
+              </Link>
+            </>
+          ) : (
+            <>
+              已有账号？
+              <Link
+                href={`/login${redirectTo !== '/' ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`}
+                className="ml-1 link"
+              >
+                登录
+              </Link>
+            </>
+          )}
+        </p>
+      </div>
     </form>
   )
 }

@@ -5,10 +5,13 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import type { PublicUser } from '@/lib/types'
 import { api } from '@/lib/api-client'
-import { PenIcon, LogoutIcon, UserIcon, ArchiveIcon } from './icons'
 import { useToast } from './ui/toast'
 
-/** 头部用户菜单：登录态展示头像 + 下拉，未登录展示登录入口 */
+/**
+ * 账户菜单。
+ * 与旧版差别：触发器是「昵称 + 一个细箭头」的纯文字，
+ * 不用圆形头像底块；下拉面板用纸色 + 细边框，不用阴影。
+ */
 export function UserMenu({ user }: { user: PublicUser | null }) {
   const router = useRouter()
   const toast = useToast()
@@ -34,21 +37,11 @@ export function UserMenu({ user }: { user: PublicUser | null }) {
 
   if (!user) {
     return (
-      <div className="flex items-center gap-1">
-        <Link href="/login" className="nav-link">
-          登录
-        </Link>
-        <Link
-          href="/register"
-          className="inline-flex h-8 items-center rounded-md bg-ink-900 px-3 text-[13px] font-medium text-white transition-colors hover:bg-ink-800 dark:bg-ink-100 dark:text-ink-900 dark:hover:bg-white"
-        >
-          注册
-        </Link>
-      </div>
+      <Link href="/login" className="nav-item ml-1">
+        登录
+      </Link>
     )
   }
-
-  const initial = (user.nickname || user.username).slice(0, 1).toUpperCase()
 
   async function logout() {
     setPending(true)
@@ -72,56 +65,45 @@ export function UserMenu({ user }: { user: PublicUser | null }) {
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex h-8 items-center gap-2 rounded-md px-1.5 transition-colors hover:bg-ink-100 dark:hover:bg-ink-800"
+        className="nav-item flex items-center gap-1.5 py-2"
       >
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink-900 text-2xs font-semibold text-white dark:bg-ink-100 dark:text-ink-900">
-          {initial}
-        </span>
-        <span className="hidden max-w-[6rem] truncate text-[13px] text-ink-700 sm:block dark:text-ink-300">
-          {user.nickname}
+        <span className="max-w-[6rem] truncate">{user.nickname}</span>
+        <span aria-hidden="true" className="text-2xs">
+          ▾
         </span>
       </button>
 
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-10 z-40 w-52 animate-fade-in overflow-hidden rounded-lg border border-ink-200 bg-white py-1 dark:border-ink-700 dark:bg-ink-900"
+          className="absolute right-0 top-full z-40 w-48 animate-rise border border-ink-line bg-paper-raised py-2 dark:border-night-line dark:bg-night-raised"
         >
-          <div className="px-3 py-2">
-            <p className="truncate text-sm font-medium text-ink-900 dark:text-ink-100">
-              {user.nickname}
-            </p>
-            <p className="truncate text-xs hint">@{user.username}</p>
+          <div className="px-4 pb-2">
+            <p className="truncate font-serif text-sm text-ink-strong dark:text-white">{user.nickname}</p>
+            <p className="meta mt-0.5 truncate">@{user.username}</p>
           </div>
-          <div className="divider" />
-          <MenuLink href="/write" icon={<PenIcon className="h-4 w-4" />} onClick={() => setOpen(false)}>
-            写文章
-          </MenuLink>
-          <MenuLink
-            href="/admin/posts"
-            icon={<ArchiveIcon className="h-4 w-4" />}
-            onClick={() => setOpen(false)}
-          >
-            我的文章
-          </MenuLink>
-          <MenuLink
-            href="/settings"
-            icon={<UserIcon className="h-4 w-4" />}
-            onClick={() => setOpen(false)}
-          >
-            账号设置
-          </MenuLink>
-          <div className="divider" />
-          <button
-            type="button"
-            role="menuitem"
-            onClick={logout}
-            disabled={pending}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink-600 transition-colors hover:bg-ink-50 disabled:opacity-50 dark:text-ink-400 dark:hover:bg-ink-800"
-          >
-            <LogoutIcon className="h-4 w-4" />
-            {pending ? '退出中…' : '退出登录'}
-          </button>
+          <div className="rule" />
+          <div className="pt-2">
+            <MenuLink href="/write" onClick={() => setOpen(false)}>
+              写文章
+            </MenuLink>
+            <MenuLink href="/admin/posts" onClick={() => setOpen(false)}>
+              我的文章
+            </MenuLink>
+            <MenuLink href="/settings" onClick={() => setOpen(false)}>
+              账号设置
+            </MenuLink>
+            <div className="rule my-2" />
+            <button
+              type="button"
+              role="menuitem"
+              onClick={logout}
+              disabled={pending}
+              className="block w-full px-4 py-1.5 text-left font-sans text-sm text-ink-soft transition-colors hover:text-accent disabled:opacity-50 dark:text-ink-muted"
+            >
+              {pending ? '退出中…' : '退出登录'}
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -130,12 +112,10 @@ export function UserMenu({ user }: { user: PublicUser | null }) {
 
 function MenuLink({
   href,
-  icon,
   children,
   onClick,
 }: {
   href: string
-  icon: React.ReactNode
   children: React.ReactNode
   onClick: () => void
 }) {
@@ -144,9 +124,8 @@ function MenuLink({
       href={href}
       role="menuitem"
       onClick={onClick}
-      className="flex items-center gap-2 px-3 py-2 text-sm text-ink-600 transition-colors hover:bg-ink-50 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-ink-100"
+      className="block px-4 py-1.5 font-sans text-sm text-ink-soft transition-colors hover:text-accent dark:text-ink-muted"
     >
-      {icon}
       {children}
     </Link>
   )

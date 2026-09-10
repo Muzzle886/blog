@@ -15,7 +15,11 @@ interface ConfirmDialogProps {
   onCancel: () => void
 }
 
-/** 轻量确认弹窗，替代 antd Modal */
+/**
+ * 轻量确认弹窗。
+ * 视觉上刻意"薄"：纸色面板 + 一条细边框，不用阴影和大圆角，
+ * 与全站的无卡片语言保持一致。
+ */
 export function ConfirmDialog({
   open,
   title,
@@ -44,7 +48,7 @@ export function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-ink-950/40 backdrop-blur-[1px]"
+        className="absolute inset-0 bg-ink-strong/25 dark:bg-night/70"
         onClick={onCancel}
         aria-hidden="true"
       />
@@ -52,13 +56,15 @@ export function ConfirmDialog({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-full max-w-sm animate-fade-in rounded-lg border border-ink-200 bg-white p-5 dark:border-ink-700 dark:bg-ink-900"
+        className="relative w-full max-w-sm animate-rise border border-ink-line bg-paper-raised p-6 dark:border-night-line dark:bg-night-raised"
       >
-        <h2 className="text-sm font-semibold text-ink-900 dark:text-ink-100">{title}</h2>
+        <h2 className="font-serif text-lg text-ink-strong dark:text-white">{title}</h2>
         {description && (
-          <p className="mt-2 text-sm text-ink-500 dark:text-ink-400">{description}</p>
+          <p className="mt-2 font-sans text-sm leading-relaxed text-ink-soft dark:text-ink-muted">
+            {description}
+          </p>
         )}
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-6 flex justify-end gap-3">
           <Button size="sm" variant="ghost" onClick={onCancel} disabled={loading}>
             {cancelText}
           </Button>

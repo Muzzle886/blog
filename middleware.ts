@@ -25,10 +25,24 @@ const PROTECTED_PREFIXES = ['/write', '/admin', '/settings']
  * 而 style 注入的危害远小于 script。
  */
 function buildCsp(nonce: string): string {
+  /*
+   * 开发模式下不用 nonce，改用 'unsafe-inline'。
+   *
+   * 原因：Next 在 dev 下不会把 nonce 注入客户端 bundle，服务端渲染出
+   * nonce="" 而客户端拿到真实 nonce，React 会对每一个脚本报
+   * "Prop `nonce` did not match" —— 几十条噪声，会淹没真正有用的告警，
+   * 也会让截图/审计脚本把控制台刷满。
+   * dev 的 CSP 本来就必须放行 'unsafe-eval'（React Refresh 需要），
+   * 安全性已经不是防线，因此这里选择"干净"而不是"看起来严格"。
+   * 生产环境仍然走 nonce + strict-dynamic。
+   */
+  const scriptSrc = IS_DEV
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+    : `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`
+
   return [
     "default-src 'self'",
-    // 开发模式下 React Refresh 需要 eval；生产环境不放行
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${IS_DEV ? " 'unsafe-eval'" : ''}`,
+    scriptSrc,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",

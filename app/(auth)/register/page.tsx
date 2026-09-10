@@ -18,7 +18,7 @@ export default async function RegisterPage() {
 
   return (
     <AuthShell title="创建账号" subtitle="注册后自动登录，第一个注册的用户将成为管理员">
-      <Suspense fallback={<div className="skeleton h-80 w-full rounded-lg" />}>
+      <Suspense fallback={<div className="skeleton h-80 w-full rounded-sm" />}>
         <AuthForm mode="register" />
       </Suspense>
     </AuthShell>
