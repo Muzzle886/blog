@@ -1,65 +1,19 @@
 import { PrismaClient } from '@prisma/client'
 
-const prisma = new PrismaClient()
+/**
+ * Prisma 客户端单例。
+ * 开发环境下 Next.js 的模块热替换会重复实例化，挂到 globalThis 上避免连接泄漏。
+ */
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 
-prisma.$use(async (params, next) => {
-  if (params.action === 'findUnique' || params.action === 'findFirst') {
-    params.action = 'findFirst'
-    params.args.where['deleted'] = false
-  }
-  if (
-    params.action === 'findFirstOrThrow' ||
-    params.action === 'findUniqueOrThrow'
-  ) {
-    if (params.args.where) {
-      if (params.args.where.deleted == undefined) {
-        params.args.where['deleted'] = false
-      }
-    } else {
-      params.args['where'] = { deleted: false }
-    }
-  }
-  if (params.action === 'findMany') {
-    if (params.args.where) {
-      if (params.args.where.deleted == undefined) {
-        params.args.where['deleted'] = false
-      }
-    } else {
-      params.args['where'] = { deleted: false }
-    }
-  }
-  return next(params)
-})
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+  })
 
-prisma.$use(async (params, next) => {
-  if (params.action == 'update') {
-    params.action = 'updateMany'
-    params.args.where['deleted'] = false
-  }
-  if (params.action == 'updateMany') {
-    if (params.args.where != undefined) {
-      params.args.where['deleted'] = false
-    } else {
-      params.args['where'] = { deleted: false }
-    }
-  }
-  return next(params)
-})
-
-prisma.$use(async (params, next) => {
-  if (params.action == 'delete') {
-    params.action = 'update'
-    params.args['data'] = { deleted: true }
-  }
-  if (params.action == 'deleteMany') {
-    params.action = 'updateMany'
-    if (params.args.data != undefined) {
-      params.args.data['deleted'] = true
-    } else {
-      params.args['data'] = { deleted: true }
-    }
-  }
-  return next(params)
-})
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma
+}
 
 export default prisma
