@@ -1,4 +1,11 @@
 User-agent: *
-Disallow:
+Allow: /
 
-Sitemap: http://www.muzzle.top/sitemap.xml
+# 受保护页面无需抓取
+Disallow: /write
+Disallow: /admin
+Disallow: /settings
+Disallow: /api/
+
+# 站点地图由 app/sitemap.ts 动态生成，域名取自 NEXT_PUBLIC_SITE_URL
+Sitemap: https://www.muzzle.top/sitemap.xml
