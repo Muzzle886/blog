@@ -96,8 +96,20 @@ const files = execSync("git ls-files '*.ts' '*.tsx'", { encoding: 'utf8' })
 const problems: Problem[] = []
 let checked = 0
 
+/**
+ * 去掉注释后再扫描。
+ * 否则本文件开头的说明文字（以及任何在注释里举例的 import 写法）
+ * 都会被当成真实 import —— 这个脚本最初就是这样误报自己的。
+ */
+function stripComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+}
+
 for (const file of files) {
-  const source = execSync(`cat ${JSON.stringify(file)}`, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 })
+  const raw = execSync(`cat ${JSON.stringify(file)}`, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 })
+  const source = stripComments(raw)
   const importRe = /(?:from|import)\s+['"]([^'"]+)['"]/g
   let match: RegExpExecArray | null
 
