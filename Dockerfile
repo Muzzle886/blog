@@ -47,8 +47,11 @@ ENV DATABASE_URL="mysql://build:build@127.0.0.1:3306/build"
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
+# --no-lint：ESLint 已在本地/CI 单独跑过（pnpm lint），构建期重复跑
+# 只是把同一份工作再做一遍，在 1.7G 内存的目标机器上纯属浪费。
+# 类型检查仍然保留 —— 那是构建产物正确性的一部分。
 RUN pnpm exec prisma generate \
-  && pnpm exec next build
+  && pnpm exec next build --no-lint
 
 # --------------------------------- runner ---------------------------------
 FROM node:22-bookworm-slim AS runner
