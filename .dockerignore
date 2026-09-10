@@ -1,0 +1,25 @@
+# 构建上下文最小化：这些都不该进镜像，也拖慢构建
+node_modules
+.next
+.git
+.screenshots
+.env
+.env.*
+!.env.example
+
+# 本地/验收产物
+*.log
+coverage
+.vscode
+.idea
+.DS_Store
+*.tsbuildinfo
+
+# 验收与开发脚本不进运行时镜像
+scripts/e2e.sh
+scripts/security-check.sh
+scripts/design-audit.ts
+scripts/screenshot.ts
+scripts/check-case.ts
+scripts/encrypt-password.ts
+scripts/init-db.ts

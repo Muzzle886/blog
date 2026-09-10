@@ -27,9 +27,12 @@ yarn-error.log*
 
 # local env files
 # 用通配符覆盖 .env.production / .env.development / .env.test 等，
-# 只显式放行模板文件 —— 否则将来新增的 .env.production 会被提交进公开仓库
+# 只放行模板文件 —— 否则将来新增的 .env.production 会被提交进公开仓库。
+# 注意放行规则要匹配 .env.production.example 这类带后缀的模板，
+# 只写 !.env.example 是不够的（踩过一次）。
 .env*
 !.env.example
+!.env.*.example
 
 # prisma
 /prisma/*.db

@@ -1,0 +1,68 @@
+# ============================================================================
+# 生产编排：自包含（自带 MySQL），不依赖外部数据库
+#
+# 目标机器只有 2 vCPU / 1.7GB 内存且无 swap，因此：
+#  - MySQL 关闭 performance_schema 并收紧 buffer pool，避免默认配置吃光内存
+#  - 两个服务都设了 mem_limit，防止单个容器把整机拖死
+#  - 镜像不在本机构建（Next 构建需 1–2GB，会 OOM），改为本地构建后推送
+#
+# 用法见 README「部署」章节。
+# ============================================================================
+
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?必须在 .env.production 中设置}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-muzzle_blog}
+      MYSQL_USER: ${MYSQL_USER:-blog}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?必须在 .env.production 中设置}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      # 小内存机器的关键几项
+      - --innodb-buffer-pool-size=192M
+      - --performance-schema=OFF
+      - --max-connections=60
+      - --innodb-log-file-size=48M
+    volumes:
+      - db_data:/var/lib/mysql
+    # 不对外暴露端口：只有 app 能通过内部网络访问
+    expose:
+      - '3306'
+    healthcheck:
+      # 用 mysqladmin ping 而不是 mysql 客户端，少一层依赖
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-uroot', '-p${MYSQL_ROOT_PASSWORD}']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    mem_limit: 640m
+
+  app:
+    image: ${APP_IMAGE:-blog:latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      HOSTNAME: 0.0.0.0
+      # 指向内部服务名，密码取自 .env.production
+      DATABASE_URL: mysql://${MYSQL_USER:-blog}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE:-muzzle_blog}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-blog_session}
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-14}
+      SESSION_IDLE_DAYS: ${SESSION_IDLE_DAYS:-7}
+      # 生产环境必须为 true，否则容器启动即失败（见 lib/auth.ts 的 fail-closed 断言）。
+      # 若前面没有 TLS 终止，先设 false 可访问，但会话令牌会以明文 HTTP 传输。
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME:-Muzzle's Blog}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+    ports:
+      - '${APP_PORT:-3000}:3000'
+    mem_limit: 512m
+
+volumes:
+  db_data:
