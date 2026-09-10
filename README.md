@@ -48,7 +48,7 @@ pnpm dev                  # http://localhost:3000
 
 | 层面 | 选择 | 说明 |
 | --- | --- | --- |
-| 框架 | Next.js 14 (App Router) | 服务端组件渲染页面，路由处理器提供 API |
+| 框架 | Next.js 14.2.35 (App Router) | 服务端组件渲染页面，路由处理器提供 API |
 | 数据库 | MySQL 8 + Prisma 5 | 迁移文件随代码入库，类型安全的数据访问 |
 | 样式 | Tailwind CSS 3 | 手写设计系统，无组件库依赖 |
 | 富文本 | marked + highlight.js + DOMPurify | 服务端渲染 + 白名单清洗 |
@@ -242,14 +242,20 @@ ssh -N -L 33306:127.0.0.1:3306 <user>@<db-host> -p <ssh-port>
 
 ## 验收
 
-项目自带三个可重复执行的验收脚本。**启动服务后**运行：
+项目自带四个可重复执行的验收脚本。**启动服务后**运行：
 
 ```bash
+pnpm test:case      # 大小写一致性检查（无需服务）
 pnpm test:api       # 41 项 API 契约与权限断言（curl）
 pnpm test:design    # 72 项设计系统与交互断言（无头浏览器）
-pnpm test           # 两者连跑
+pnpm test           # 三者连跑
 pnpm shots          # 逐页截图到 .screenshots/，供人工核对视觉
 ```
+
+`test:case` 覆盖：校验每条 `@/` 与相对路径 import 的每一段大小写是否与磁盘一致。
+**macOS/Windows 的文件系统不区分大小写**，`import '@/components/Header'`
+指向磁盘上的 `header.tsx` 在本地完全正常，但部署到 Linux（CI、Docker）
+会直接 `Module not found`。这个检查抓的正是这一类只在部署时才暴露的问题。
 
 `test:api` 覆盖：状态码、响应结构、字段级校验、软删除可见性、
 越权拦截（非作者改/删、游客读草稿）、游标分页、会话失效。
@@ -258,7 +264,8 @@ pnpm shots          # 逐页截图到 .screenshots/，供人工核对视觉
 深色模式对比度 ≥ 7:1、320–1440px 无横向溢出、单一 h1、
 控件可读名称、Tab 焦点可见、搜索防抖、表单校验错误展示。
 
-> 当前状态：`test:api` 41/41、`test:design` 72/72 通过（dev 与 production 构建均已验证）。
+> 当前状态：`test:case` 206 条 import 全通过、`test:api` 41/41、
+> `test:design` 72/72（dev 与 production 构建均已验证）。
 
 `test:api` 会在数据库中创建 `e2e_author_*` / `e2e_reader_*` 测试账号与临时文章
 （文章在用例末尾删除，账号与软删除记录保留）。若要彻底清理：
@@ -311,6 +318,13 @@ pnpm db:seed   # 清空并重写演示数据（会删掉全部用户、文章、
   可替换为 MySQL FULLTEXT 或外部搜索引擎。
 - **站点地图每次请求实时查询**：文章量大时应改为定时生成或加缓存。
 - **无图片上传**：Markdown 中的图片需填写外链地址，未接入对象存储。
+- **Next.js 固定在 14.2.x**：14.2.7 存在中间件授权绕过
+  （[CVE-2025-29927](https://dependabot.ecosyste.ms/advisories/CVE-2025-29927)，
+  通过 `x-middleware-subrequest` 头跳过中间件），已升级到 **14.2.35**。
+  本项目即使被绕过也不泄露数据——中间件只做「有无 Cookie」的廉价前置拦截，
+  真实鉴权在 layout 与 API 路由中——但仍应保持该版本以上。
+  仓库另有若干来自开发工具链（eslint / jsdom）的传递依赖告警，
+  不影响生产运行时，未逐个升级以避免引入不必要的变更。
 
 ---
 
