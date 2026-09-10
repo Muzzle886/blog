@@ -17,11 +17,23 @@ const scrypt = promisify(scryptCallback) as (
 ) => Promise<Buffer>
 
 /**
- * 演示账号密码。默认值仅供本地演示，部署前请用环境变量覆盖：
- *   SEED_ADMIN_PASSWORD=... SEED_READER_PASSWORD=... pnpm db:seed
+ * 演示账号密码。
+ *
+ * 源码里**不内置任何口令** —— 种子脚本会随仓库提交，写死的口令等于
+ * 把它公开（README 里写口令也是同一个问题）。因此：
+ *   - 未提供环境变量时：每次播种随机生成，并在输出中打印一次
+ *   - 需要固定口令（CI / 本地反复播种）：用 SEED_ADMIN_PASSWORD 指定
+ *   - 部署前务必用环境变量覆盖，避免随机口令散落在日志里
  */
-const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || 'Blog@2024'
-const READER_PASSWORD = process.env.SEED_READER_PASSWORD || 'Reader@2024'
+function generatePassword(): string {
+  // 16 字节 base64url，约 128 位熵，足够演示账号使用
+  return randomBytes(16).toString('base64url')
+}
+
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || generatePassword()
+const READER_PASSWORD = process.env.SEED_READER_PASSWORD || generatePassword()
+const ADMIN_PASSWORD_IS_GENERATED = !process.env.SEED_ADMIN_PASSWORD
+const READER_PASSWORD_IS_GENERATED = !process.env.SEED_READER_PASSWORD
 
 async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16)
@@ -689,7 +701,7 @@ async function main(): Promise<void> {
   if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PROD_SEED !== 'true') {
     console.error('✗ 拒绝在 NODE_ENV=production 下执行种子脚本（它会清空全部数据）。')
     console.error('  确实需要时请设置 ALLOW_PROD_SEED=true，并务必同时设置')
-    console.error('  SEED_ADMIN_PASSWORD / SEED_READER_PASSWORD 覆盖默认口令。')
+    console.error('  SEED_ADMIN_PASSWORD / SEED_READER_PASSWORD 指定口令（否则随机生成）。')
     process.exit(1)
   }
 
@@ -702,11 +714,11 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  if (!process.env.SEED_ADMIN_PASSWORD) {
+  if (ADMIN_PASSWORD_IS_GENERATED || READER_PASSWORD_IS_GENERATED) {
     console.warn(
-      '\n⚠ 未设置 SEED_ADMIN_PASSWORD，管理员将使用默认口令「%s」（README 中已公开）。\n' +
-        '  仅可用于本地演示，切勿用于任何对外可访问的环境。\n',
-      ADMIN_PASSWORD,
+      '\n⚠ 未通过 SEED_ADMIN_PASSWORD / SEED_READER_PASSWORD 指定口令，' +
+        '本次随机生成。\n' +
+        '  口令只会在下方输出一次，请自行保存；需要可复现的口令请显式设置这两个变量。\n',
     )
   }
 
@@ -843,8 +855,8 @@ async function main(): Promise<void> {
 ✓ 种子数据写入完成
   用户 ${users} · 文章 ${posts}（含 1 篇草稿） · 标签 ${tags} · 评论 ${comments}
 
-  管理员账号：muzzle / ${ADMIN_PASSWORD}
-  普通账号：  reader / ${READER_PASSWORD}
+  管理员账号：muzzle / ${ADMIN_PASSWORD}${ADMIN_PASSWORD_IS_GENERATED ? '  (随机生成)' : ''}
+  普通账号：  reader / ${READER_PASSWORD}${READER_PASSWORD_IS_GENERATED ? '  (随机生成)' : ''}
 `)
 }
 

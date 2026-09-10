@@ -32,7 +32,6 @@ export function AuthShell({
             <p className="mt-1.5 text-sm text-ink-500 dark:text-ink-400">{subtitle}</p>
           </div>
           <div className="card p-6">{children}</div>
-          <p className="mt-5 text-center text-xs hint">演示账号：muzzle / Blog@2024</p>
         </div>
       </main>
     </div>

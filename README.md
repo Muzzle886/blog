@@ -30,15 +30,15 @@ pnpm db:seed
 pnpm dev                  # http://localhost:3000
 ```
 
-演示账号（由 `db:seed` 创建）：
+`db:seed` 会创建两个演示账号（一个管理员、一个普通用户）并打印它们的用户名与口令。
+口令可用环境变量覆盖，部署前务必覆盖：
 
-| 账号 | 密码 | 角色 |
-| --- | --- | --- |
-| `muzzle` | `Blog@2024` | 管理员 |
-| `reader` | `Reader@2024` | 普通用户 |
+```bash
+SEED_ADMIN_PASSWORD='...' SEED_READER_PASSWORD='...' pnpm db:seed
+```
 
-> 默认密码仅供本地演示，部署前请覆盖：
-> `SEED_ADMIN_PASSWORD=... SEED_READER_PASSWORD=... pnpm db:seed`
+> 种子口令不出现在本文件里（避免把它提交进公开仓库）。
+> 忘记时重跑一次 `pnpm db:seed` 即可看到，或直接设置上面的变量。
 
 > 全新数据库上，**第一个注册的用户会自动成为管理员**，方便自建博客初始化。
 
@@ -233,12 +233,16 @@ pnpm db:studio     # 打开 Prisma Studio
 pnpm db:reset      # 重置数据库并重跑迁移与种子
 ```
 
-### 通过 SSH 隧道访问内网数据库
+### 远程数据库
+
+`DATABASE_URL` 直接指向远程实例即可，无需隧道：
 
 ```bash
-ssh -N -L 33306:127.0.0.1:3306 <user>@<db-host> -p <ssh-port>
-# 随后把 DATABASE_URL 指向 127.0.0.1:33306
+DATABASE_URL="mysql://user:pass@db-host:3306/blog"
 ```
+
+只需注意密码的百分号转义（见上一节）。若数据库仅对内网开放，
+可在内网机器上执行迁移与播种，应用进程本身不做特殊处理。
 
 ---
 
@@ -262,7 +266,7 @@ pnpm shots          # 逐页截图到 .screenshots/，供人工核对视觉
 
 `test:api` 覆盖：状态码、响应结构、字段级校验、软删除可见性、
 越权拦截（非作者改/删、游客读草稿）、游标分页、会话失效。
-脚本启动前会先探测数据库连通性 —— 隧道断开时会有大量 500，
+脚本启动前会先探测数据库连通性 —— 数据库不可达时会有大量 500，
 与代码缺陷极易混淆，预检能直接把它区分出来。
 
 `test:design` 覆盖：无装饰性阴影、容器圆角 ≤ 12px、色板收敛、

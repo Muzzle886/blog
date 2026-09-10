@@ -122,7 +122,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
             autoComplete="username"
             value={form.identifier}
             onChange={(event) => update('identifier', event.target.value)}
-            placeholder="muzzle 或 muzzle@example.com"
+            placeholder="用户名或邮箱"
           />
         </Field>
       ) : (
@@ -134,7 +134,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
               autoComplete="username"
               value={form.username}
               onChange={(event) => update('username', event.target.value)}
-              placeholder="muzzle"
+              placeholder="用户名"
             />
           </Field>
 
@@ -144,7 +144,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
               name="nickname"
               value={form.nickname}
               onChange={(event) => update('nickname', event.target.value)}
-              placeholder="Muzzle"
+              placeholder="展示给他人的名字"
             />
           </Field>
 
@@ -156,7 +156,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
               autoComplete="email"
               value={form.email}
               onChange={(event) => update('email', event.target.value)}
-              placeholder="muzzle@example.com"
+              placeholder="you@example.com"
             />
           </Field>
         </>

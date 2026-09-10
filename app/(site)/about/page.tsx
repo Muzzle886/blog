@@ -86,32 +86,6 @@ export default async function AboutPage() {
         </section>
       )}
 
-      <section>
-        <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-ink-400 dark:text-ink-500">
-          开放接口
-        </h2>
-        <p className="mb-4 text-sm text-ink-500 dark:text-ink-400">
-          本站 API 遵循 RESTful 规范，成功返回 <code className="rounded bg-ink-100 px-1 py-0.5 font-mono text-xs dark:bg-ink-800">{'{ data, meta? }'}</code>，
-          失败返回 <code className="rounded bg-ink-100 px-1 py-0.5 font-mono text-xs dark:bg-ink-800">{'{ error: { code, message } }'}</code>。
-        </p>
-        <pre className="overflow-x-auto rounded-lg border border-ink-200 bg-ink-50 p-4 font-mono text-xs leading-relaxed text-ink-700 dark:border-ink-800 dark:bg-[#0f1115] dark:text-ink-300">
-          {`GET    /api/posts                列表（page/pageSize/q/tag/sort）
-POST   /api/posts                新建文章
-GET    /api/posts/:slug          文章详情
-PATCH  /api/posts/:slug          局部更新
-DELETE /api/posts/:slug          删除
-GET    /api/posts/:slug/comments 评论（游标分页）
-POST   /api/posts/:slug/comments 发表评论
-DELETE /api/comments/:id         删除评论
-GET    /api/tags                 标签列表
-POST   /api/auth/register        注册
-POST   /api/auth/login           登录
-DELETE /api/auth/session         退出
-GET    /api/users/me             当前用户
-PATCH  /api/users/me             更新资料
-GET    /api/stats                站点统计`}
-        </pre>
-      </section>
     </div>
   )
 }

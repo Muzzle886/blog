@@ -13,6 +13,7 @@
  */
 import { chromium, type Page } from 'playwright-core'
 import { execSync } from 'node:child_process'
+import { loadEnv, requireAdminCredentials } from '@/lib/env'
 
 const BASE = process.argv[2] ?? 'http://localhost:3000'
 
@@ -151,15 +152,13 @@ async function collectStyles(page: Page) {
 }
 
 async function main(): Promise<void> {
+  loadEnv()
   const browser = await chromium.launch({ executablePath: findChromium(), headless: true })
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'zh-CN' })
   const page = await context.newPage()
 
   await page.request.post(`${BASE}/api/auth/login`, {
-    data: {
-      identifier: process.env.SEED_ADMIN_USER || 'muzzle',
-      password: process.env.SEED_ADMIN_PASSWORD || 'Blog@2024',
-    },
+    data: requireAdminCredentials(),
   })
 
   const { post: POST_SLUG, tag: TAG_SLUG } = await resolveFixtures()

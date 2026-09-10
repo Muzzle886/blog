@@ -169,10 +169,36 @@ checkstr "错误响应不含堆栈/Prisma 内部信息" "0" \
 
 section "8. Markdown 清洗（XSS / 危险 URI）"
 
-# 建一篇含攻击载荷的文章，通过真实渲染管线验证清洗结果
-JAR_X=$(mktemp)
-curl -s -c "$JAR_X" -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
-  -d '{"identifier":"muzzle","password":"Blog@2024"}' -o /dev/null
+# 建一篇含攻击载荷的文章，通过真实渲染管线验证清洗结果。
+# 凭据从环境变量/.env 读取，脚本里不内置任何口令。
+if [ -z "${SEED_ADMIN_PASSWORD:-}" ]; then
+  SSLUG=$(python3 -c "
+import re,sys
+try:
+    for line in open('.env', encoding='utf-8'):
+        m = re.match(r'\s*SEED_ADMIN_PASSWORD\s*=\s*(.*)\s*$', line)
+        if m: print(m.group(1).strip().strip('\"').strip(\"'\")); break
+except FileNotFoundError: pass
+")
+  SEED_ADMIN_PASSWORD="${SSLUG:-}"
+fi
+ADMIN_USER="${SEED_ADMIN_USER:-muzzle}"
+
+if [ -z "$SEED_ADMIN_PASSWORD" ]; then
+  printf '  \033[33m!\033[0m 未设置 SEED_ADMIN_PASSWORD，跳过 Markdown 清洗用例\n'
+  printf '    可在 .env 中设置该变量后重跑\n'
+else
+  JAR_X=$(mktemp)
+  curl -s -c "$JAR_X" -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
+    -d "{\"identifier\":\"$ADMIN_USER\",\"password\":\"$SEED_ADMIN_PASSWORD\"}" -o /dev/null
+  XLOGIN=$(curl -s -b "$JAR_X" -o /dev/null -w '%{http_code}' "$BASE/api/users/me")
+  if [ "$XLOGIN" != "200" ]; then
+    printf '  \033[33m!\033[0m 管理员登录失败（%s），跳过 Markdown 清洗用例\n' "$XLOGIN"
+    SEED_ADMIN_PASSWORD=""
+  fi
+fi
+
+if [ -n "$SEED_ADMIN_PASSWORD" ]; then
 
 PAYLOAD=$(python3 - <<'PYEOF'
 import json
@@ -242,7 +268,9 @@ PYEOF
 
   curl -s -b "$JAR_X" -X DELETE "$BASE/api/posts/$XSLUG" -o /dev/null
 fi
+
 rm -f "$JAR_X"
+fi  # end of SEED_ADMIN_PASSWORD guard
 
 section "9. 速率限制（防撞库 / 资源耗尽）"
 

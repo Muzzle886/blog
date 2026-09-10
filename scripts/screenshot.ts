@@ -9,6 +9,7 @@ import { chromium, type ConsoleMessage } from 'playwright-core'
 import { mkdirSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { resolve } from 'node:path'
+import { loadEnv, requireAdminCredentials } from '@/lib/env'
 
 const BASE = process.argv[2] ?? 'http://localhost:3000'
 const OUT = resolve(process.cwd(), process.argv[3] ?? '.screenshots')
@@ -73,6 +74,7 @@ const SHOTS: Shot[] = [
 ]
 
 async function main(): Promise<void> {
+  loadEnv()
   mkdirSync(OUT, { recursive: true })
   const postSlug = await resolvePostSlug()
 
@@ -93,10 +95,7 @@ async function main(): Promise<void> {
 
   // 先登录，拿到会话 Cookie 供后续 auth 截图使用
   const loginResponse = await page.request.post(`${BASE}/api/auth/login`, {
-    data: {
-      identifier: process.env.SEED_ADMIN_USER || 'muzzle',
-      password: process.env.SEED_ADMIN_PASSWORD || 'Blog@2024',
-    },
+    data: requireAdminCredentials(),
   })
   if (!loginResponse.ok()) {
     console.warn(`⚠ 登录失败（${loginResponse.status()}），受保护页面截图将重定向到登录页`)

@@ -38,13 +38,13 @@ status_of() { echo "$1" | tail -n1; }
 
 section() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 
-# 预检：数据库不可达时会有大量 500，跟代码问题很容易混淆
-# （本机通过 SSH 隧道连测试库，隧道断开就会这样）
+# 预检：数据库不可达时会有大量 500，跟代码问题很容易混淆，
+# 预检能直接把「环境问题」和「代码缺陷」区分开
 PREFLIGHT=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/stats")
 if [ "$PREFLIGHT" != "200" ]; then
   printf '\n\033[31m✗ 预检失败：GET /api/stats 返回 %s\033[0m\n' "$PREFLIGHT"
-  echo "  服务未启动，或数据库不可达（隧道断了？）。"
-  echo "  隧道检查：lsof -nP -iTCP:33306 -sTCP:LISTEN"
+  echo "  服务未启动，或数据库不可达。"
+  echo "  检查：pnpm exec tsx scripts/init-db.ts 可验证数据库连通性"
   exit 2
 fi
 
