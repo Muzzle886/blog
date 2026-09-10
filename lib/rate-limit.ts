@@ -38,12 +38,16 @@ export interface RateLimitRule {
 }
 
 export const RateLimit = {
-  /** 登录：按账号+来源，防定向撞库 */
-  login: { windowMs: 15 * 60 * 1000, max: 10 },
-  /** 登录：按来源 IP，防广撒网式撞库 */
-  loginByIp: { windowMs: 15 * 60 * 1000, max: 30 },
+  /**
+   * 登录：按账号。额度取 20 而不是更小 —— 真人常常先试错几次，
+   * 而且同一办公室/手机网络下多人会共用出口 IP，过紧会误伤正常用户。
+   * 20 次仍然远低于撞库所需的数量级。
+   */
+  login: { windowMs: 15 * 60 * 1000, max: 20 },
+  /** 登录：按来源 IP，挡广撒网式撞库（覆盖共用出口 IP 的场景） */
+  loginByIp: { windowMs: 15 * 60 * 1000, max: 60 },
   /** 注册：按来源 IP，防批量注册 */
-  register: { windowMs: 60 * 60 * 1000, max: 10 },
+  register: { windowMs: 60 * 60 * 1000, max: 20 },
   /** 评论：按用户 */
   comment: { windowMs: 60 * 1000, max: 5 },
   /** 发表文章：按用户 */

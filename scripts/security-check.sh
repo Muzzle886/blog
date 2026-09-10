@@ -6,6 +6,9 @@
 set -uo pipefail
 
 BASE="${1:-http://localhost:3000}"
+
+# 口令加密辅助（服务端拒绝明文，测试必须走同一条链路）
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/crypto-helper.sh"
 JAR_A=$(mktemp)
 JAR_B=$(mktemp)
 JAR_C=$(mktemp)
@@ -19,9 +22,11 @@ req() {
   local jar="$1" method="$2" path="$3" body="${4:-}"
   if [ -n "$body" ]; then
     curl -s -X "$method" "$BASE$path" -b "$jar" -c "$jar" \
-      -H 'Content-Type: application/json' -d "$body" -w '\n%{http_code}'
+      -H 'Content-Type: application/json' -H "X-Forwarded-For: $FORWARDED_IP" \
+      -d "$body" -w '\n%{http_code}'
   else
-    curl -s -X "$method" "$BASE$path" -b "$jar" -c "$jar" -w '\n%{http_code}'
+    curl -s -X "$method" "$BASE$path" -b "$jar" -c "$jar" \
+      -H "X-Forwarded-For: $FORWARDED_IP" -w '\n%{http_code}'
   fi
 }
 
@@ -50,13 +55,16 @@ status_of() { echo "$1" | tail -n1; }
 section() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 
 STAMP=$(date +%s)
+
+# 模拟来源 IP：与 e2e 用不同网段，避免共用同一个按 IP 的限流桶
+FORWARDED_IP="198.51.100.$((RANDOM % 200 + 10))"
 USER="sec_$STAMP"
 PASS1="Passw0rd123"
 PASS2="Passw0rd456"
 
 section "1. 会话令牌：明文绝不入库"
 
-R=$(req "$JAR_A" POST /api/auth/register "{\"username\":\"$USER\",\"email\":\"$USER@example.com\",\"password\":\"$PASS1\",\"nickname\":\"Sec Test\"}")
+R=$(req "$JAR_A" POST /api/auth/register "{\"username\":\"$USER\",\"email\":\"$USER@example.com\",\"password\":\"$(enc_pw "$PASS1")\",\"nickname\":\"Sec Test\"}")
 check "注册测试账号" 201 "$(status_of "$R")"
 
 TOKEN_A=$(grep -o 'blog_session[[:space:]].*' "$JAR_A" | awk '{print $NF}')
@@ -70,15 +78,15 @@ checkstr "数据库中保存的是令牌摘要，不是令牌本身" "HASHED_OK"
 section "2. 修改密码：撤销该账号的全部会话"
 
 curl -s -c "$JAR_B" -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
-  -d "{\"identifier\":\"$USER\",\"password\":\"$PASS1\"}" -o /dev/null
+  -d "{\"identifier\":\"$USER\",\"password\":\"$(enc_pw "$PASS1")\"}" -o /dev/null
 curl -s -c "$JAR_C" -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
-  -d "{\"identifier\":\"$USER\",\"password\":\"$PASS1\"}" -o /dev/null
+  -d "{\"identifier\":\"$USER\",\"password\":\"$(enc_pw "$PASS1")\"}" -o /dev/null
 
 check "会话A 改密前有效" 200 "$(curl -s -b "$JAR_A" -o /dev/null -w '%{http_code}' "$BASE/api/users/me")"
 check "会话B 改密前有效" 200 "$(curl -s -b "$JAR_B" -o /dev/null -w '%{http_code}' "$BASE/api/users/me")"
 check "会话C 改密前有效" 200 "$(curl -s -b "$JAR_C" -o /dev/null -w '%{http_code}' "$BASE/api/users/me")"
 
-R=$(req "$JAR_A" PATCH /api/users/me/password "{\"currentPassword\":\"$PASS1\",\"newPassword\":\"$PASS2\"}")
+R=$(req "$JAR_A" PATCH /api/users/me/password "{\"currentPassword\":\"$(enc_pw "$PASS1")\",\"newPassword\":\"$(enc_pw "$PASS2")\"}")
 check "修改密码" 200 "$(status_of "$R")"
 
 check "会话A（发起改密）已失效" 401 "$(curl -s -b "$JAR_A" -o /dev/null -w '%{http_code}' "$BASE/api/users/me")"
@@ -88,9 +96,9 @@ check "会话C（其它设备）已失效 ★关键" 401 "$(curl -s -b "$JAR_C" 
 section "3. 退出其它设备 / 会话列表"
 
 curl -s -c "$JAR_A" -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
-  -d "{\"identifier\":\"$USER\",\"password\":\"$PASS2\"}" -o /dev/null
+  -d "{\"identifier\":\"$USER\",\"password\":\"$(enc_pw "$PASS2")\"}" -o /dev/null
 curl -s -c "$JAR_B" -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
-  -d "{\"identifier\":\"$USER\",\"password\":\"$PASS2\"}" -o /dev/null
+  -d "{\"identifier\":\"$USER\",\"password\":\"$(enc_pw "$PASS2")\"}" -o /dev/null
 
 R=$(req "$JAR_A" GET /api/users/me/sessions)
 check "GET  /api/users/me/sessions" 200 "$(status_of "$R")"
@@ -113,16 +121,59 @@ check "长度异常的令牌" 401 \
 
 section "5. 账号枚举与错误信息"
 
-R=$(req "$(mktemp)" POST /api/auth/login '{"identifier":"no_such_user_xyz","password":"Whatever123"}')
+R=$(req "$(mktemp)" POST /api/auth/login "{\"identifier\":\"no_such_${STAMP}_a\",\"password\":\"$(enc_pw Whatever123)\"}")
 MSG_NOUSER=$(body_of "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["error"]["message"])' 2>/dev/null)
-R=$(req "$(mktemp)" POST /api/auth/login "{\"identifier\":\"$USER\",\"password\":\"WrongPass999\"}")
+R=$(req "$(mktemp)" POST /api/auth/login "{\"identifier\":\"no_such_${STAMP}_b\",\"password\":\"$(enc_pw WrongPass999)\"}")
 MSG_WRONG=$(body_of "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["error"]["message"])' 2>/dev/null)
 checkstr "账号不存在与密码错误的提示一致（防枚举）" "$MSG_WRONG" "$MSG_NOUSER"
 
-section "6. 安全响应头"
+section "6. 口令传输加密（RSA-OAEP）"
+
+R=$(req "$(mktemp)" GET /api/auth/public-key)
+check "GET  /api/auth/public-key" 200 "$(status_of "$R")"
+PUB=$(body_of "$R")
+check "     -> 返回 RSA-OAEP-256 公钥" 1 "$(echo "$PUB" | grep -c '"algorithm":"RSA-OAEP-256"')"
+check "     -> 带 keyId 供服务端选私钥" 1 "$(echo "$PUB" | grep -c '"keyId"')"
+
+# 核心断言：明文口令必须被拒绝，加密后才放行
+PLAIN=$(req "$(mktemp)" POST /api/auth/login "{\"identifier\":\"$USER\",\"password\":\"$PASS1\"}")
+# 走的是字段级校验，因此是 422 而不是 400（与其它参数校验失败一致）
+check "明文口令提交被拒绝（422）" 422 "$(status_of "$PLAIN")"
+check "     -> 明确提示需加密" 1 "$(body_of "$PLAIN" | grep -c '加密形式提交')"
+
+# 注意：第 2 节已把口令改成 PASS2，这里必须用当前口令
+ENCRYPTED=$(req "$(mktemp)" POST /api/auth/login "{\"identifier\":\"$USER\",\"password\":\"$(enc_pw "$PASS2")\"}")
+check "加密口令可正常登录" 200 "$(status_of "$ENCRYPTED")"
+
+# 同一口令加密两次的密文必须不同（OAEP 每次随机填充），否则可被重放比对
+C1=$(enc_pw "$PASS2")
+C2=$(enc_pw "$PASS2")
+checkstr "同一口令两次加密得到不同密文（OAEP 随机填充）" "different" \
+  "$([ "$C1" != "$C2" ] && echo different || echo same)"
+
+# 畸形/伪造信封不能靠异常绕过，也不能 500
+# 拒绝分两层，断言要分开：
+#   - 外壳不合格式（缺 keyId/密文）-> 422 字段校验
+#   - 外壳合法但密钥未知/密文损坏 -> 400 解密失败
+# 注意用 ${bad} 而不是 $bad：紧跟转义引号时 bash 会读成 ${bad"}
+# 用不存在的标识符：每个用例独立限流桶。解密发生在账号查询之前，
+# 所以外壳不合规仍会在校验层被拒，不影响这两条断言的有效性。
+for bad in "not-an-envelope" "plain-password-123"; do
+  BADRES=$(req "$(mktemp)" POST /api/auth/login "{\"identifier\":\"no_such_${STAMP}_c\",\"password\":\"${bad}\"}")
+  check "外壳不合规（${bad}）-> 422" 422 "$(status_of "$BADRES")"
+done
+
+# 带前缀但缺 keyId/密文，只有解密层能判断，因此是 400
+for bad in "rsa-oaep-sha256:" "rsa-oaep-sha256:bogus:AAAA" "rsa-oaep-sha256:$(printf 'a%.0s' {1..16}):AAAA"; do
+  BADRES=$(req "$(mktemp)" POST /api/auth/login "{\"identifier\":\"no_such_${STAMP}_d\",\"password\":\"${bad}\"}")
+  check "未知密钥/损坏密文 -> 400 且不 5xx" 400 "$(status_of "$BADRES")"
+done
+
+section "7. 安全响应头"
 
 HDRS=$(curl -s -D- -o /dev/null "$BASE/")
-for h in "content-security-policy" "x-content-type-options" "x-frame-options" "referrer-policy" "permissions-policy"; do
+# CSP 已按决策移除，不在此列（单独断言其确实未下发）
+for h in "x-content-type-options" "x-frame-options" "referrer-policy" "permissions-policy"; do
   if echo "$HDRS" | grep -qi "^$h:"; then
     printf '  \033[32m✓\033[0m %-56s 存在\n' "$h"
     PASS=$((PASS + 1))
@@ -132,27 +183,19 @@ for h in "content-security-policy" "x-content-type-options" "x-frame-options" "r
   fi
 done
 
-CSP=$(echo "$HDRS" | grep -i "^content-security-policy:" | head -1)
-# dev 与 prod 的 CSP 策略不同：dev 为了不让 Next 的 nonce 注水告警刷屏，
-# script-src 放行 unsafe-inline（dev 本就必需 unsafe-eval，CSP 不是防线）。
-# 这条断言针对生产策略，因此先判断环境。
-if curl -s "$BASE/" | grep -q "next/dist/client"; then
-  printf '  \033[33m-\033[0m %-56s 跳过（当前是 dev 环境，CSP 走 dev 策略）\n' "CSP 使用 nonce 而非 unsafe-inline"
-else
-  checkstr "CSP 使用 nonce 而非 unsafe-inline（script-src）" "0" \
-    "$(echo "$CSP" | grep -c "script-src[^;]*unsafe-inline" || true)"
-fi
-checkstr "CSP 禁止内嵌框架（frame-ancestors none）" "1" \
-  "$(echo "$CSP" | grep -c "frame-ancestors 'none'" || true)"
-checkstr "CSP 禁止 object（object-src none）" "1" \
-  "$(echo "$CSP" | grep -c "object-src 'none'" || true)"
+# CSP 已按需移除：不再断言其内容，改为确认它确实没有被下发，
+# 避免以后有人误以为还在受保护。
+checkstr "未下发 CSP（按当前决策移除）" "0" \
+  "$(echo "$HDRS" | grep -ci "^content-security-policy:" || true)"
+checkstr "HSTS 仅在 https 下下发" "0" \
+  "$(echo "$HDRS" | grep -ci "^strict-transport-security:" || true)"
 
 # API 响应同样需要安全头
 APIHDRS=$(curl -s -D- -o /dev/null "$BASE/api/stats")
 checkstr "API 响应也带 x-content-type-options" "1" \
   "$(echo "$APIHDRS" | grep -ci "^x-content-type-options:" || true)"
 
-section "7. 数据暴露：公开接口不泄露敏感字段"
+section "8. 数据暴露：公开接口不泄露敏感字段"
 
 for path in "/api/posts?pageSize=1" "/api/tags" "/api/stats" "/api/users/muzzle"; do
   BODY=$(curl -s "$BASE$path")
@@ -174,7 +217,7 @@ ERRS=$(curl -s "$BASE/api/posts/definitely-not-a-slug")
 checkstr "错误响应不含堆栈/Prisma 内部信息" "0" \
   "$(echo "$ERRS" | grep -ciE "prisma|at Object|node_modules|SELECT|stack" || true)"
 
-section "8. Markdown 清洗（XSS / 危险 URI）"
+section "9. Markdown 清洗（XSS / 危险 URI）"
 
 # 建一篇含攻击载荷的文章，通过真实渲染管线验证清洗结果。
 # 凭据从环境变量/.env 读取，脚本里不内置任何口令。
@@ -197,7 +240,7 @@ if [ -z "$SEED_ADMIN_PASSWORD" ]; then
 else
   JAR_X=$(mktemp)
   curl -s -c "$JAR_X" -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
-    -d "{\"identifier\":\"$ADMIN_USER\",\"password\":\"$SEED_ADMIN_PASSWORD\"}" -o /dev/null
+    -d "{\"identifier\":\"$ADMIN_USER\",\"password\":\"$(enc_pw "$SEED_ADMIN_PASSWORD")\"}" -o /dev/null
   XLOGIN=$(curl -s -b "$JAR_X" -o /dev/null -w '%{http_code}' "$BASE/api/users/me")
   if [ "$XLOGIN" != "200" ]; then
     printf '  \033[33m!\033[0m 管理员登录失败（%s），跳过 Markdown 清洗用例\n' "$XLOGIN"
@@ -285,20 +328,22 @@ fi
 rm -f "$JAR_X"
 fi  # end of SEED_ADMIN_PASSWORD guard
 
-section "9. 速率限制（防撞库 / 资源耗尽）"
+section "10. 速率限制（防撞库 / 资源耗尽）"
 
 # 用专项账号测试，避免影响其它用例的会话。
 # 登录限流按「账号」与「来源 IP」两个维度，这里测账号维度。
 RL_USER="rl_$STAMP"
 curl -s -X POST "$BASE/api/auth/register" -H 'Content-Type: application/json' \
-  -d "{\"username\":\"$RL_USER\",\"email\":\"$RL_USER@example.com\",\"password\":\"$PASS1\",\"nickname\":\"RL\"}" \
+  -H "X-Forwarded-For: $FORWARDED_IP" \
+  -d "{\"username\":\"$RL_USER\",\"email\":\"$RL_USER@example.com\",\"password\":\"$(enc_pw "$PASS1")\",\"nickname\":\"RL\"}" \
   -o /dev/null
 
 RL_HIT=""
-for i in $(seq 1 13); do
+# 账号维度额度是 20/15min，因此要打到 21 次以上才会触发
+for i in $(seq 1 24); do
   CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/auth/login" \
-    -H 'Content-Type: application/json' \
-    -d "{\"identifier\":\"$RL_USER\",\"password\":\"definitelywrong\"}")
+    -H 'Content-Type: application/json' -H "X-Forwarded-For: $FORWARDED_IP" \
+    -d "{\"identifier\":\"$RL_USER\",\"password\":\"$(enc_pw definitelywrong)\"}")
   if [ "$CODE" = "429" ] && [ -z "$RL_HIT" ]; then RL_HIT="$i"; fi
 done
 
@@ -306,17 +351,17 @@ if [ -n "$RL_HIT" ]; then
   printf '  \033[32m✓\033[0m %-56s 第 %s 次触发 429\n' "连续错误密码触发限流" "$RL_HIT"
   PASS=$((PASS + 1))
 else
-  printf '  \033[31m✗\033[0m %-56s 13 次均未限流\n' "连续错误密码触发限流"
+  printf '  \033[31m✗\033[0m %-56s 24 次均未限流\n' "连续错误密码触发限流"
   FAIL=$((FAIL + 1))
 fi
 
 # 限流生效后正确密码也必须被挡住，否则限流形同虚设
 RL2=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/auth/login" \
-  -H 'Content-Type: application/json' \
-  -d "{\"identifier\":\"$RL_USER\",\"password\":\"$PASS1\"}")
+  -H 'Content-Type: application/json' -H "X-Forwarded-For: $FORWARDED_IP" \
+  -d "{\"identifier\":\"$RL_USER\",\"password\":\"$(enc_pw "$PASS1")\"}")
 check "限流生效后正确密码同样被挡（不可绕过）" 429 "$RL2"
 
-section "10. 畸形与边界输入（不应 5xx）"
+section "11. 畸形与边界输入（不应 5xx）"
 
 # 服务端渲染页面若直接用 searchParams（Next 对重复参数会传数组），
 # `?q=a&q=b` 这类输入会让 .trim() 抛 TypeError 变成 500。
@@ -330,7 +375,7 @@ done
 check "畸形 Cookie (%) 视为未登录而非 500" 401 \
   "$(curl -s -o /dev/null -w '%{http_code}' -H 'Cookie: blog_session=%' "$BASE/api/users/me")"
 
-section "11. 受保护路由"
+section "12. 受保护路由"
 
 check "未登录访问 /settings 重定向" 307 "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/settings")"
 check "未登录访问 /admin/posts 重定向" 307 "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/admin/posts")"

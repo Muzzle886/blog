@@ -1,9 +1,10 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { PublicUser } from '@/lib/types'
 import { api, ApiError } from '@/lib/api-client'
+import { getCipher, resetCipher, type PasswordCipher } from '@/lib/client-crypto'
 import { Button, Field, Input, Spinner, Textarea } from './ui'
 import { useToast } from './ui/toast'
 
@@ -25,6 +26,18 @@ export function SettingsForm({ user }: { user: PublicUser }) {
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirm: '' })
   const [passwordError, setPasswordError] = useState('')
   const [savingPassword, setSavingPassword] = useState(false)
+  // 改密同样以密文提交；公钥在挂载时预取
+  const [cipher, setCipher] = useState<PasswordCipher | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    getCipher()
+      .then((value) => alive && setCipher(value))
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [])
 
   async function saveProfile(event: React.FormEvent) {
     event.preventDefault()
@@ -61,12 +74,18 @@ export function SettingsForm({ user }: { user: PublicUser }) {
       return
     }
 
+    if (!cipher) {
+      setPasswordError('加密公钥尚未就绪，请刷新页面后重试')
+      return
+    }
+
     setSavingPassword(true)
     try {
-      await api.patch('/api/users/me/password', {
-        currentPassword: passwords.currentPassword,
-        newPassword: passwords.newPassword,
-      })
+      const [currentPassword, newPassword] = await Promise.all([
+        cipher.encrypt(passwords.currentPassword),
+        cipher.encrypt(passwords.newPassword),
+      ])
+      await api.patch('/api/users/me/password', { currentPassword, newPassword })
       toast.success('密码已修改，请重新登录')
       router.push('/login')
       router.refresh()
@@ -75,6 +94,10 @@ export function SettingsForm({ user }: { user: PublicUser }) {
         setPasswordError(
           error.details?.length ? error.details.map((d) => d.message).join('；') : error.message,
         )
+      } else if (error instanceof Error && /加密|公钥|Web Crypto/.test(error.message)) {
+        resetCipher()
+        setCipher(null)
+        setPasswordError(`${error.message}，请刷新页面后重试`)
       } else {
         setPasswordError('修改失败')
       }

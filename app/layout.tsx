@@ -25,7 +25,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
-        {/* nonce 由 ThemeScript 自行按环境读取，避免 dev 下的属性不匹配告警 */}
         <ThemeScript />
       </head>
       <body className="font-sans">

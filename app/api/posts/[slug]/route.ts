@@ -1,4 +1,4 @@
-import { noContent, ok, readJson, route } from '@/lib/http'
+import { ok, readJson, route } from '@/lib/http'
 import { parseOrThrow, postUpdateSchema } from '@/lib/validation'
 import { postService } from '@/server/post-service'
 import { getCurrentUser, requireUser } from '@/lib/auth'
@@ -37,9 +37,15 @@ export const PUT = route(async (request, { params }: Ctx) => {
   return ok(await postService.update(params.slug, input, viewer))
 })
 
-/** DELETE /api/posts/:slug — 软删除 */
+/**
+ * DELETE /api/posts/:slug — 软删除
+ *
+ * 成功返回 200 + { slug, deleted: true }：删除是幂等语义之外的操作，
+ * 调用方需要明确的确认信号（返回被删的是哪一个、是否真的删掉了），
+ * 而不只是一个空响应。
+ */
 export const DELETE = route(async (request, { params }: Ctx) => {
   const viewer = await requireUser(request)
   await postService.remove(params.slug, viewer)
-  return noContent()
+  return ok({ slug: params.slug, deleted: true })
 })

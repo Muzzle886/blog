@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { validationFailed } from './errors'
+import { badRequest, validationFailed } from './errors'
 
 /** 校验并返回数据；失败时抛出 422 AppError（含字段级明细） */
 export function parseOrThrow<T extends z.ZodTypeAny>(schema: T, input: unknown): z.infer<T> {
@@ -55,21 +55,30 @@ export const passwordSchema = z
   .regex(/[a-zA-Z]/, '密码需包含字母')
   .regex(/[0-9]/, '密码需包含数字')
 
+/**
+ * 口令字段一律以密文信封提交（RSA-OAEP），服务端解密后再校验强度。
+ * 这里只做「外壳形状」校验；真正的长度/复杂度在解密后由 assertPassword 检查，
+ * 因此明文永远不会出现在请求体里。
+ */
+export const encryptedPasswordSchema = z
+  .string()
+  .min(1, '请输入密码')
+  .max(2048, '密文过长')
+  .refine((value) => value.startsWith('rsa-oaep-sha256:'), {
+    message: '密码必须以加密形式提交',
+  })
+
 export const registerSchema = z.object({
   username: usernameSchema,
   email: z.string().trim().email('邮箱格式不正确').max(128),
-  password: passwordSchema,
+  password: encryptedPasswordSchema,
   nickname: z.string().trim().min(1, '昵称不能为空').max(32, '昵称最多 32 个字符'),
 })
 
 export const loginSchema = z.object({
   /** 支持用户名或邮箱登录 */
   identifier: z.string().trim().min(1, '请输入用户名或邮箱').max(128, '输入过长'),
-  /**
-   * 上限必须有：scrypt 的计算成本随输入长度增长，登录接口若不限制
-   * 输入长度，就成了廉价的 CPU/内存放大器。
-   */
-  password: z.string().min(1, '请输入密码').max(128, '密码最多 128 位'),
+  password: encryptedPasswordSchema,
 })
 
 export const updateProfileSchema = z.object({
@@ -79,8 +88,8 @@ export const updateProfileSchema = z.object({
 })
 
 export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, '请输入当前密码').max(128, '密码最多 128 位'),
-  newPassword: passwordSchema,
+  currentPassword: encryptedPasswordSchema,
+  newPassword: encryptedPasswordSchema,
 })
 
 const tagNameSchema = z.string().trim().min(1).max(32)
@@ -115,3 +124,45 @@ export const commentQuerySchema = z.object({
   cursor: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 })
+
+/* ==================== 口令解密与强度校验 ==================== */
+
+/*
+ * 说明：解密放在这里而不是 zod 里，是因为它是异步的（crypto），
+ * 而 zod 的 refine 同步执行。解密后立刻用 passwordSchema 校验强度，
+ * 这样「最短 8 位、需含字母与数字」等规则仍然生效，且错误提示与从前一致。
+ */
+
+import { decryptPassword } from './password-crypto'
+
+export interface DecryptedPasswords {
+  [field: string]: string
+}
+
+/**
+ * 解密一个口令字段。失败时抛出 400，提示不区分具体原因
+ * （避免把「密钥不匹配」「密文损坏」暴露成可探测的差异）。
+ */
+export function decryptField(value: string, field: string): string {
+  const result = decryptPassword(value)
+  if (!result.ok) {
+    const message =
+      result.reason === 'unknown_key'
+        ? '加密密钥已更新，请刷新页面后重试'
+        : '密码解密失败，请刷新页面后重试'
+    throw badRequest(`${field}: ${message}`)
+  }
+  return result.plaintext
+}
+
+/** 解密并按强度规则校验一个新口令（登录时只解密不校验强度） */
+export function decryptAndValidateNewPassword(value: string, field: string): string {
+  const plaintext = decryptField(value, field)
+  const parsed = passwordSchema.safeParse(plaintext)
+  if (!parsed.success) {
+    throw validationFailed(
+      parsed.error.issues.map((issue) => ({ path: field, message: issue.message })),
+    )
+  }
+  return plaintext
+}

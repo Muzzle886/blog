@@ -7,9 +7,12 @@ import { ErrorCode, type ApiErrorBody, type ApiSuccessBody } from './types'
 
 /**
  * API 响应约定
- *  成功：{ data, meta? }            状态码 200 / 201 / 204
+ *  成功：{ data, meta? }            状态码 200（创建为 201）
  *  失败：{ error: { code, message, details? } }
  *       code 为业务错误码（见 lib/types.ts），与 HTTP 状态码解耦
+ *
+ * 约定：**成功的写操作也返回响应体**。原先删除类接口返回 204 空响应，
+ * 调用方只能靠状态码猜结果；统一改成 200 + 明确的确认字段。
  */
 
 export function ok<T>(data: T, meta?: Record<string, unknown>, status = 200): NextResponse {
@@ -19,10 +22,6 @@ export function ok<T>(data: T, meta?: Record<string, unknown>, status = 200): Ne
 
 export function created<T>(data: T, meta?: Record<string, unknown>): NextResponse {
   return ok(data, meta, 201)
-}
-
-export function noContent(): NextResponse {
-  return new NextResponse(null, { status: 204 })
 }
 
 export function fail(

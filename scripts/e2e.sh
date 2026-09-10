@@ -17,9 +17,11 @@ req() { # req <jar> <method> <path> [json]
   local jar="$1" method="$2" path="$3" body="${4:-}"
   if [ -n "$body" ]; then
     curl -s -X "$method" "$BASE$path" -b "$jar" -c "$jar" \
-      -H 'Content-Type: application/json' -d "$body" -w '\n%{http_code}'
+      -H 'Content-Type: application/json' -H "X-Forwarded-For: $FORWARDED_IP" \
+      -d "$body" -w '\n%{http_code}'
   else
-    curl -s -X "$method" "$BASE$path" -b "$jar" -c "$jar" -w '\n%{http_code}'
+    curl -s -X "$method" "$BASE$path" -b "$jar" -c "$jar" \
+      -H "X-Forwarded-For: $FORWARDED_IP" -w '\n%{http_code}'
   fi
 }
 
@@ -32,6 +34,9 @@ check() { # check <label> <expected_status> <actual_status> [extra]
     FAIL=$((FAIL + 1))
   fi
 }
+
+# 口令加密辅助（与其它验收脚本共用）
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/crypto-helper.sh"
 
 body_of() { echo "$1" | sed '$d'; }
 status_of() { echo "$1" | tail -n1; }
@@ -49,24 +54,27 @@ if [ "$PREFLIGHT" != "200" ]; then
 fi
 
 STAMP=$(date +%s)
+
+# 模拟来源 IP：与 security-check 用不同网段，避免共用同一个按 IP 的限流桶
+FORWARDED_IP="203.0.113.$((RANDOM % 200 + 10))"
 USER_A="e2e_author_$STAMP"
 USER_B="e2e_reader_$STAMP"
 
 section "1. 鉴权 —— 注册 / 登录 / 会话"
 
-R=$(req "$JAR_A" POST /api/auth/register "{\"username\":\"$USER_A\",\"email\":\"$USER_A@example.com\",\"password\":\"Passw0rd123\",\"nickname\":\"E2E 作者\"}")
+R=$(req "$JAR_A" POST /api/auth/register "{\"username\":\"$USER_A\",\"email\":\"$USER_A@example.com\",\"password\":\"$(enc_pw Passw0rd123)\",\"nickname\":\"E2E 作者\"}")
 check "POST /api/auth/register 创建用户" 201 "$(status_of "$R")" "$(body_of "$R" | head -c 160)"
 
-R=$(req "$JAR_ANON" POST /api/auth/register "{\"username\":\"$USER_A\",\"email\":\"x@example.com\",\"password\":\"Passw0rd123\",\"nickname\":\"重复\"}")
+R=$(req "$JAR_ANON" POST /api/auth/register "{\"username\":\"$USER_A\",\"email\":\"x@example.com\",\"password\":\"$(enc_pw Passw0rd123)\",\"nickname\":\"重复\"}")
 check "POST /api/auth/register 重名 -> 409" 409 "$(status_of "$R")"
 
-R=$(req "$JAR_ANON" POST /api/auth/register '{"username":"ab","email":"bad","password":"123","nickname":""}')
+R=$(req "$JAR_ANON" POST /api/auth/register '{"username":"ab","email":"bad","password":"rsa-oaep-sha256:bogus:AAAA","nickname":""}')
 check "POST /api/auth/register 参数非法 -> 422" 422 "$(status_of "$R")"
 
-R=$(req "$JAR_ANON" POST /api/auth/login "{\"identifier\":\"$USER_A\",\"password\":\"wrongpass1\"}")
+R=$(req "$JAR_ANON" POST /api/auth/login "{\"identifier\":\"$USER_A\",\"password\":\"$(enc_pw wrongpass1)\"}")
 check "POST /api/auth/login 密码错误 -> 401" 401 "$(status_of "$R")"
 
-R=$(req "$JAR_B" POST /api/auth/register "{\"username\":\"$USER_B\",\"email\":\"$USER_B@example.com\",\"password\":\"Passw0rd123\",\"nickname\":\"E2E 读者\"}")
+R=$(req "$JAR_B" POST /api/auth/register "{\"username\":\"$USER_B\",\"email\":\"$USER_B@example.com\",\"password\":\"$(enc_pw Passw0rd123)\",\"nickname\":\"E2E 读者\"}")
 check "POST /api/auth/register 第二个用户" 201 "$(status_of "$R")"
 
 R=$(req "$JAR_A" GET /api/users/me)
@@ -142,7 +150,8 @@ R=$(req "$JAR_ANON" POST "/api/posts/$DRAFT_SLUG/comments" '{"content":"游客�
 check "POST comments 未登录 -> 401" 401 "$(status_of "$R")"
 
 R=$(req "$JAR_B" DELETE "/api/comments/$ROOT_ID")
-check "DELETE /api/comments/:id 作者删自己的" 204 "$(status_of "$R")"
+check "DELETE /api/comments/:id 作者删自己的" 200 "$(status_of "$R")"
+check "     -> 响应体含 deleted 确认字段" 1 "$(body_of "$R" | grep -c '"deleted":true')"
 
 R=$(req "$JAR_B" DELETE "/api/comments/999999")
 check "DELETE /api/comments/:id 不存在 -> 404" 404 "$(status_of "$R")"
@@ -169,7 +178,8 @@ R=$(req "$JAR_ANON" GET "/api/users/$USER_A")
 check "GET  /api/users/:username 公开资料" 200 "$(status_of "$R")"
 
 R=$(req "$JAR_A" DELETE "/api/posts/$DRAFT_SLUG")
-check "DELETE /api/posts/:slug 作者删除 -> 204" 204 "$(status_of "$R")"
+check "DELETE /api/posts/:slug 作者删除 -> 200" 200 "$(status_of "$R")"
+check "     -> 响应体含 deleted 确认字段" 1 "$(body_of "$R" | grep -c '"deleted":true')"
 
 R=$(req "$JAR_ANON" GET "/api/posts/$DRAFT_SLUG")
 check "     -> 删除后前台不可见" 404 "$(status_of "$R")"
@@ -177,7 +187,8 @@ check "     -> 删除后前台不可见" 404 "$(status_of "$R")"
 section "6. 退出登录"
 
 R=$(req "$JAR_A" DELETE /api/auth/session)
-check "DELETE /api/auth/session -> 204" 204 "$(status_of "$R")"
+check "DELETE /api/auth/session -> 200" 200 "$(status_of "$R")"
+check "     -> 响应体含 loggedOut 字段" 1 "$(body_of "$R" | grep -c '"loggedOut"')"
 
 R=$(req "$JAR_A" GET /api/users/me)
 check "     -> 会话失效" 401 "$(status_of "$R")"

@@ -128,6 +128,7 @@ scripts/                     # 建库、端到端测试、设计验收、截图
 | --- | --- | --- | --- |
 | `POST` | `/api/auth/register` | 注册并登录 | — |
 | `POST` | `/api/auth/login` | 登录（用户名或邮箱） | — |
+| `GET` | `/api/auth/public-key` | 取口令加密公钥（含 keyId） | — |
 | `DELETE` | `/api/auth/session` | 退出登录 | — |
 | `GET` | `/api/users/me` | 当前用户 | 需登录 |
 | `PATCH` | `/api/users/me` | 更新昵称 / 邮箱 / 简介 | 需登录 |
@@ -177,11 +178,14 @@ scripts/                     # 建库、端到端测试、设计验收、截图
 
 ### 状态码约定
 
+> **约定：成功的写操作一律返回响应体**（删除返回 `{ deleted: true }`、
+> 登出返回 `{ loggedOut: true }`）。不使用 204 空响应 —— 调用方需要明确的
+> 确认信号，而不是只能靠状态码猜结果。
+
 | 场景 | 状态码 |
 | --- | --- |
-| 查询成功 / 更新成功 | 200 |
+| 查询 / 更新 / 删除 / 退出成功 | 200 |
 | 创建成功 | 201 |
-| 删除成功、退出登录 | 204 |
 | 参数格式非法、非法 JSON | 400 / 422 |
 | 未登录 | 401 |
 | 已登录但无权操作 | 403 |
@@ -281,13 +285,12 @@ pnpm shots          # 逐页截图到 .screenshots/，供人工核对视觉
 
 `test:security` 覆盖：会话令牌明文不入库（直接查库核对摘要）、
 改密码撤销全部会话、退出其它设备、伪造/畸形令牌、账号枚举提示一致性、
-5 项安全响应头与 CSP 的 nonce 策略、公开接口不泄露 `email`/`role`/`passwordHash`、
+4 项安全响应头、口令传输加密（含明文被拒）、公开接口不泄露 `email`/`role`/`passwordHash`、
 Markdown 清洗（含 `data:` URI 白名单）、速率限制生效且不可绕过、
 畸形与边界输入不产生 5xx。
 
 > 当前状态：`test:case` 206 条 import 全通过、`test:api` 41/41、
-> `test:design` 99/99、`test:security` 54/54 + 1 跳过（dev 下 CSP 走 dev 策略；
-> 生产构建下该断言已单独验证通过）。
+> `test:design` 99/99、`test:security` 65/65。
 
 `test:api` 会在数据库中创建 `e2e_author_*` / `e2e_reader_*` 测试账号与临时文章
 （文章在用例末尾删除，账号与软删除记录保留）。若要彻底清理：
@@ -365,14 +368,37 @@ pnpm db:seed   # 清空并重写演示数据
 - **页面参数归一化**：Next 对重复 query 参数传数组、`Number('1e999')` 为
   `Infinity`，都会让页面直接 500。统一经 `lib/search-params.ts` 收口。
 
+### 口令传输加密
+
+登录、注册、改密的口令都在浏览器内用 **RSA-OAEP / SHA-256** 加密后再提交，
+请求体里不含明文：
+
+```
+GET  /api/auth/public-key     # 取公钥（含 keyId）
+POST /api/auth/login          # { password: "rsa-oaep-sha256:<keyId>:<base64>" }
+```
+
+- 私钥只存在于服务端内存，12 小时轮换一次；轮换后保留上一把私钥，
+  避免缓存了旧公钥的页面立刻失效
+- 密钥对挂在 `globalThis` 上 —— 否则 dev 模式 HMR 重载模块时会重新生成密钥，
+  导致「取公钥」与「提交表单」之间只要发生一次重编译就失败
+- **服务端强制**：明文口令直接拒绝（外壳不合规 422、密钥未知 400），
+  不依赖前端自觉
+- OAEP 每次填充随机，同一口令两次加密得到不同密文
+
+> 边界要说清楚：它只能防「明文传输」，**不能替代 HTTPS** ——
+> 中间人若替换公钥仍可解密；也不能防同页面内注入的脚本。
+> 真正的传输安全仍然依赖 TLS。
+
 ### 传输与响应
 
-- 中间件为每个请求生成 nonce 并下发 CSP：`script-src 'self' 'nonce-…' 'strict-dynamic'`、
-  `frame-ancestors 'none'`、`object-src 'none'`、`base-uri 'self'`、`form-action 'self'`。
-  用 nonce 而非 `unsafe-inline`，只有这样 CSP 对 XSS 才真正有效。
-- 另有 `X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、
+- `X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、
   `Referrer-Policy: strict-origin-when-cross-origin`、`Permissions-Policy`，
   HTTPS 下自动附加 HSTS。
+- **未下发 CSP**。曾实现过 nonce + `strict-dynamic` 方案，但副作用较大
+  （dev 下 Next 不把 nonce 注入客户端 bundle，导致每个脚本都报属性不匹配；
+  主题脚本要为它专门串 nonce；验收脚本还需按环境区分断言）。
+  当前阶段收益用不上，故移除；需要时可从 git 历史取回。
 - API 响应统一 `Cache-Control: no-store` + `Vary: Cookie`，
   避免共享缓存把 A 的登录态响应发给 B。
 

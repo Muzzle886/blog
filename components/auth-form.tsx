@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { api, ApiError } from '@/lib/api-client'
 import { safeRedirectPath } from '@/lib/safe-redirect'
+import { getCipher, resetCipher, type PasswordCipher } from '@/lib/client-crypto'
 import { useToast } from './ui/toast'
 import { Button, Field, Input, Spinner } from './ui'
 
@@ -33,11 +34,24 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [errors, setErrors] = useState<FieldErrors>({})
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // 公钥在挂载时就预取，避免点提交时才等待（会明显变慢）
+  const [cipher, setCipher] = useState<PasswordCipher | null>(null)
+  const [cipherError, setCipherError] = useState('')
 
   useEffect(() => {
     setErrors({})
     setFormError('')
   }, [mode])
+
+  useEffect(() => {
+    let alive = true
+    getCipher()
+      .then((value) => alive && setCipher(value))
+      .catch(() => alive && setCipherError('无法获取加密公钥，请刷新页面重试'))
+    return () => {
+      alive = false
+    }
+  }, [])
 
   function update(key: keyof typeof form, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -56,10 +70,19 @@ export function AuthForm({ mode }: { mode: Mode }) {
     setFormError('')
 
     try {
+      if (!cipher) {
+        setFormError(cipherError || '加密公钥尚未就绪，请稍后重试')
+        setSubmitting(false)
+        return
+      }
+
+      // 口令在浏览器内加密后再提交，请求体里不含明文
+      const encryptedPassword = await cipher.encrypt(form.password)
+
       if (mode === 'login') {
         await api.post('/api/auth/login', {
           identifier: form.identifier.trim(),
-          password: form.password,
+          password: encryptedPassword,
         })
         toast.success('登录成功')
       } else {
@@ -67,7 +90,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
           username: form.username.trim(),
           email: form.email.trim(),
           nickname: form.nickname.trim(),
-          password: form.password,
+          password: encryptedPassword,
         })
         toast.success('注册成功，已自动登录')
       }
@@ -89,6 +112,11 @@ export function AuthForm({ mode }: { mode: Mode }) {
         } else {
           setFormError(error.message)
         }
+      } else if (error instanceof Error && /加密|公钥|Web Crypto/.test(error.message)) {
+        // 公钥可能已轮换，清掉缓存让下次重新取
+        resetCipher()
+        setCipher(null)
+        setFormError(`${error.message}，请刷新页面后重试`)
       } else {
         setFormError('网络异常，请稍后重试')
       }
