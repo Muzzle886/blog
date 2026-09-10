@@ -403,7 +403,17 @@ pnpm db:seed   # 清空并重写演示数据
 ## 部署注意
 
 1. `.env` 不入库（已 gitignore），部署时单独注入；模板见 `.env.example`。
-2. 生产环境（HTTPS）务必设置 `COOKIE_SECURE=true`，否则 Cookie 会随明文请求发送。
+2. 生产环境（HTTPS）**必须**设置 `COOKIE_SECURE=true`。
+   未设置时会 **fail-closed**：登录与登出直接返回 500，并在服务端日志打印
+   「生产环境必须设置 COOKIE_SECURE=true…」。这是有意的 —— 宁可不发 Cookie，
+   也不用一个会在明文 HTTP 上泄露的 Cookie。
+   注意 `NODE_ENV=production` 下即使只是本机 `pnpm start` 跑在 http:// 上，
+   也会命中这条断言；那种场景请用 `pnpm dev`，或显式接受风险后再设置。
 3. 设置 `NEXT_PUBLIC_SITE_URL` 为真实域名，否则站点地图与 OG 元数据会指向 localhost。
 4. 迁移用 `prisma migrate deploy`（而非 `migrate dev`），种子数据按需执行。
+   `db:seed` 会清空全部数据，生产环境默认拒绝执行（需 `ALLOW_PROD_SEED=true`）。
 5. `pnpm build` 与 `pnpm dev` 不要同时运行，两者共用 `.next/` 目录。
+6. 速率限制是**进程内**的：多实例部署时每个实例各算一份额度。
+   需要严格限流时应改用 Redis 或网关层限流。
+7. 反向代理后部署时，请确保 `x-forwarded-for` 由代理注入并剥离客户端自带值，
+   否则限流维度与「登录设备」里的 IP 都可被伪造。

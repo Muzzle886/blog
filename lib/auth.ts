@@ -28,16 +28,22 @@ const IDLE_DAYS = Number(process.env.SESSION_IDLE_DAYS || '7')
 const SECURE = process.env.COOKIE_SECURE === 'true'
 
 /**
- * 生产环境必须开启 Secure，否则 14 天有效期的会话令牌会随明文 HTTP 请求
- * 暴露在链路上，攻击者拿到即可完全接管账号。
- * 这里选择「启动即失败」而不是静默降级 —— 配置错误应该在部署时暴露，
- * 而不是在被人抓包之后才发现。
+ * 生产环境必须开启 Secure，否则会话令牌会随明文 HTTP 泄露，
+ * 攻击者拿到即可完全接管账号。
+ *
+ * 这里刻意**不在模块作用域抛错**：Next 在构建期会以 NODE_ENV=production
+ * 收集页面数据，模块级抛错会让 `next build` 直接失败，而构建环境未必
+ * 持有运行时的全部环境变量。改为在「即将下发 Cookie」这个真正的风险点
+ * 上做断言 —— 既不会误伤构建，又能让配置错误在第一次登录时就暴露，
+ * 且是 fail-closed（宁可不发 Cookie，也不用不安全的 Cookie）。
  */
-if (process.env.NODE_ENV === 'production' && !SECURE) {
-  throw new Error(
-    '生产环境必须设置 COOKIE_SECURE=true（否则会话 Cookie 会在明文 HTTP 上泄露）。' +
-      '即使 TLS 在反向代理处终止，也仍需开启该选项。',
-  )
+function assertSecureCookie(): void {
+  if (process.env.NODE_ENV === 'production' && !SECURE) {
+    throw new Error(
+      '生产环境必须设置 COOKIE_SECURE=true（否则会话 Cookie 会在明文 HTTP 上泄露）。' +
+        '即使 TLS 在反向代理处终止，也仍需开启该选项。',
+    )
+  }
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -123,6 +129,8 @@ export async function createSessionForUser(
   // 登录是低频操作，适合顺带做一次清理
   void cleanupExpiredSessions()
 
+  assertSecureCookie()
+
   const { token, expiresAt } = await createSession(userId, meta)
   response.cookies.set({
     name: COOKIE_NAME,
@@ -137,6 +145,7 @@ export async function createSessionForUser(
 }
 
 export function clearSessionCookie(response: NextResponse): void {
+  assertSecureCookie()
   response.cookies.set({
     name: COOKIE_NAME,
     value: '',
