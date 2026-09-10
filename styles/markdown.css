@@ -1,0 +1,187 @@
+/**
+ * 文章正文（Markdown 渲染结果）样式
+ * 仅作用于 .markdown-body 容器，不污染编辑器的等宽输入区
+ */
+
+.markdown-body {
+  @apply text-[16px] leading-[1.8] text-ink-800 dark:text-ink-200;
+  word-wrap: break-word;
+}
+
+.markdown-body > *:first-child {
+  @apply mt-0;
+}
+
+.markdown-body > *:last-child {
+  @apply mb-0;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  @apply mt-9 mb-3 font-semibold tracking-tight text-ink-900 dark:text-ink-50;
+  scroll-margin-top: 5rem;
+}
+
+.markdown-body h1 {
+  @apply text-2xl;
+}
+
+.markdown-body h2 {
+  @apply border-b border-ink-200 pb-1.5 text-xl dark:border-ink-800;
+}
+
+.markdown-body h3 {
+  @apply text-lg;
+}
+
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  @apply text-base;
+}
+
+.markdown-body p {
+  @apply my-4;
+}
+
+.markdown-body a {
+  @apply font-medium text-accent underline decoration-accent/30 decoration-1 underline-offset-2 transition-colors hover:decoration-accent;
+}
+
+.markdown-body strong {
+  @apply font-semibold text-ink-900 dark:text-ink-50;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  @apply my-4 space-y-1.5 pl-6;
+}
+
+.markdown-body ul {
+  @apply list-disc;
+}
+
+.markdown-body ol {
+  @apply list-decimal;
+}
+
+.markdown-body li > ul,
+.markdown-body li > ol {
+  @apply my-1.5;
+}
+
+.markdown-body blockquote {
+  @apply my-5 border-l-2 border-ink-300 pl-4 text-ink-600 dark:border-ink-700 dark:text-ink-400;
+}
+
+.markdown-body blockquote p {
+  @apply my-2;
+}
+
+.markdown-body hr {
+  @apply my-8 border-ink-200 dark:border-ink-800;
+}
+
+.markdown-body code {
+  @apply rounded border border-ink-200 bg-ink-50 px-1.5 py-0.5 font-mono text-[0.85em] text-ink-800 dark:border-ink-800 dark:bg-ink-800/60 dark:text-ink-200;
+}
+
+.markdown-body pre {
+  @apply my-5 overflow-x-auto rounded-lg border border-ink-200 bg-ink-50 p-4 dark:border-ink-800 dark:bg-[#0f1115];
+}
+
+.markdown-body pre code {
+  @apply block border-0 bg-transparent p-0 text-[13px] leading-relaxed text-ink-800 dark:text-ink-200;
+}
+
+.markdown-body table {
+  @apply my-5 block w-full overflow-x-auto border-collapse text-sm;
+}
+
+.markdown-body th,
+.markdown-body td {
+  @apply border border-ink-200 px-3 py-2 text-left dark:border-ink-800;
+}
+
+.markdown-body th {
+  @apply bg-ink-50 font-semibold dark:bg-ink-800/60;
+}
+
+.markdown-body img {
+  @apply my-5 max-w-full rounded-lg border border-ink-200 dark:border-ink-800;
+}
+
+.markdown-body input[type='checkbox'] {
+  @apply mr-1.5 align-middle;
+}
+
+.markdown-body kbd {
+  @apply rounded border border-ink-300 bg-ink-50 px-1.5 py-0.5 font-mono text-xs dark:border-ink-700 dark:bg-ink-800;
+}
+
+/* 空段落（换行产生的 <br>）不额外撑高 */
+.markdown-body p:empty {
+  display: none;
+}
+
+/* ===== 代码高亮（highlight.js 主题精简版） ===== */
+.markdown-body .hljs-comment,
+.markdown-body .hljs-quote {
+  @apply italic text-ink-400 dark:text-ink-500;
+}
+
+.markdown-body .hljs-keyword,
+.markdown-body .hljs-selector-tag,
+.markdown-body .hljs-literal,
+.markdown-body .hljs-section,
+.markdown-body .hljs-doctag,
+.markdown-body .hljs-name {
+  @apply text-[#a626a4] dark:text-[#c678dd];
+}
+
+.markdown-body .hljs-string,
+.markdown-body .hljs-regexp,
+.markdown-body .hljs-addition,
+.markdown-body .hljs-attribute,
+.markdown-body .hljs-meta .hljs-string {
+  @apply text-[#50a14f] dark:text-[#98c379];
+}
+
+.markdown-body .hljs-number,
+.markdown-body .hljs-variable,
+.markdown-body .hljs-template-variable,
+.markdown-body .hljs-type,
+.markdown-body .hljs-selector-attr,
+.markdown-body .hljs-selector-pseudo {
+  @apply text-[#986801] dark:text-[#d19a66];
+}
+
+.markdown-body .hljs-title,
+.markdown-body .hljs-title.class_,
+.markdown-body .hljs-title.function_,
+.markdown-body .hljs-built_in {
+  @apply text-[#4078f2] dark:text-[#61afef];
+}
+
+.markdown-body .hljs-attr,
+.markdown-body .hljs-symbol,
+.markdown-body .hljs-bullet,
+.markdown-body .hljs-link {
+  @apply text-[#0184bc] dark:text-[#56b6c2];
+}
+
+.markdown-body .hljs-deletion {
+  @apply text-[#e45649] dark:text-[#e06c75];
+}
+
+.markdown-body .hljs-emphasis {
+  font-style: italic;
+}
+
+.markdown-body .hljs-strong {
+  font-weight: 600;
+}

@@ -1,3 +1,9 @@
+// 博客系统数据模型
+// 约定：
+//  - 主键统一使用自增整型 id，对外暴露 slug（文章）保证 URL 友好且稳定
+//  - 删除策略：Post / Comment 使用软删除（deletedAt）；User 使用软删除（deletedAt）
+//  - 时间字段统一 createdAt / updatedAt
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,27 +14,107 @@ datasource db {
 }
 
 model User {
-  id         Int       @unique @default(autoincrement())
-  username   String    @db.VarChar(20)
-  password   String    @db.VarChar(255)
-  name       String    @db.VarChar(20)
-  phone      String?   @db.VarChar(20)
-  email      String?   @db.VarChar(100)
-  deleted    Boolean   @default(false)
-  created_at DateTime? @default(now())
-  updated_at DateTime? @updatedAt
-  posts      Post[]
+  id           Int       @id @default(autoincrement())
+  username     String    @unique @db.VarChar(32)
+  email        String    @unique @db.VarChar(128)
+  passwordHash String    @db.VarChar(255)
+  nickname     String    @db.VarChar(32)
+  bio          String?   @db.VarChar(200)
+  role         Role      @default(USER)
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  @@id([id, username])
+  posts    Post[]
+  comments Comment[]
+  sessions Session[]
+
+  @@index([deletedAt])
+}
+
+model Session {
+  id        String   @id @db.VarChar(64)
+  userId    Int
+  userAgent String?  @db.VarChar(255)
+  ip        String?  @db.VarChar(64)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Post {
-  id         Int       @id @default(autoincrement())
-  title      String    @db.VarChar(50)
-  content    String    @db.Text
-  author     User      @relation(fields: [authorId], references: [id])
-  authorId   Int
-  deleted    Boolean   @default(false)
-  created_at DateTime? @default(now())
-  updated_at DateTime? @updatedAt
+  id        Int        @id @default(autoincrement())
+  slug      String     @unique @db.VarChar(80)
+  title     String     @db.VarChar(120)
+  summary   String     @db.VarChar(300)
+  content   String     @db.Text
+  status    PostStatus @default(DRAFT)
+  views     Int        @default(0)
+  authorId  Int
+  deletedAt DateTime?
+  publishedAt DateTime?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  author   User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  tags     PostTag[]
+  comments Comment[]
+
+  @@index([status, publishedAt])
+  @@index([authorId])
+  @@index([deletedAt])
+}
+
+model Tag {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(32)
+  slug      String   @unique @db.VarChar(48)
+  createdAt DateTime @default(now())
+
+  posts PostTag[]
+}
+
+model PostTag {
+  postId Int
+  tagId  Int
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+  @@index([tagId])
+}
+
+model Comment {
+  id        Int       @id @default(autoincrement())
+  content   String    @db.VarChar(1000)
+  postId    Int
+  authorId  Int
+  parentId  Int?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  post    Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies Comment[] @relation("CommentReplies")
+
+  @@index([postId, createdAt])
+  @@index([parentId])
+  @@index([deletedAt])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
 }
