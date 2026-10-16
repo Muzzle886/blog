@@ -19,7 +19,8 @@
     "test:case": "tsx scripts/check-case.ts",
     "test": "tsx scripts/check-case.ts && bash scripts/security-check.sh && bash scripts/e2e.sh && tsx scripts/design-audit.ts",
     "shots": "tsx scripts/screenshot.ts",
-    "test:security": "bash scripts/security-check.sh"
+    "test:security": "bash scripts/security-check.sh",
+    "api:go": "go run -C server-go ./cmd/api"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts --yes"
